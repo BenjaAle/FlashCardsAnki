@@ -1,0 +1,16 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+
+# ignorar archivos .py de prueba
+app.py
+app_memoria.py
+
+lectura.txt
+*.csv
+*.json
