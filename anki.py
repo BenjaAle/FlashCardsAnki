@@ -95,6 +95,7 @@ response = client.models.generate_content(model="gemini-2.5-flash", contents=pro
 
 respuesta_limpia = response.text.replace("```json", "").replace("```", "").strip()
 
+# Extraer la lista de cartas del JSON devuelto por Gemini, manejando ambos casos (objeto o lista)
 try:
     datos_brutos = json.loads(respuesta_limpia)
     if isinstance(datos_brutos, dict):
@@ -195,7 +196,7 @@ for i, carta in enumerate(lista_cartas):
             # Enganchamos el botón de audio abajo del texto que Gemini ya escribió
             texto_reverso += f"<br><br>🔊 <b>Listen to the example:</b> [sound:{nombre_archivo_ejemplo}]"
         except Exception as e:
-            pass
+            print(f"   ⚠️ No se pudo generar audio para el ejemplo: {e}")
 
     # --- INYECCIÓN A ANKI ---
     nota = {
