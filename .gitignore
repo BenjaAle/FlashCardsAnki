@@ -7,9 +7,9 @@ __pycache__/
 venv/
 env/
 
-# ignorar archivos .py de prueba
-app.py
-app_memoria.py
+# ignorar archivosAntiguos
+archivosAntiguos/
+
 
 lectura.txt
 *.csv
