@@ -383,8 +383,36 @@ def extraer_anki(req: ExtraerRequest):
                     },
                 )
                 cartas_agregadas += 1
-            except:
-                pass
+            except Exception as e:
+                # 🌟 EL PLAN B: Si falla porque es duplicado, y la IA nos dio un ejemplo, creamos una carta de frase
+                if texto_ejemplo and "duplicate" in str(e).lower():
+                    # El nuevo frente será la oración en inglés y su audio
+                    frente_alternativo = texto_ejemplo
+                    if "nombre_archivo_ejemplo" in locals():
+                        frente_alternativo += f" [sound:{nombre_archivo_ejemplo}]"
+
+                    # El nuevo reverso recordará cuál era la palabra objetivo y mostrará toda la explicación
+                    reverso_alternativo = f"🎯 <b>Contexto original:</b> {texto_frente}<br><br>{texto_reverso}"
+
+                    try:
+                        invoke_anki(
+                            "addNote",
+                            note={
+                                "deckName": mazo_destino,
+                                "modelName": NOMBRE_TIPO_CARTA,
+                                "fields": {
+                                    CAMPO_FRENTE: frente_alternativo,
+                                    CAMPO_REVERSO: reverso_alternativo,
+                                },
+                                "options": {"allowDuplicate": False},
+                                "tags": ["generado_por_ia_python", "frase_contexto"],
+                            },
+                        )
+                        cartas_agregadas += 1
+                    except:
+                        pass
+                else:
+                    pass
 
         for msg_id in ids_mensajes:
             c.execute("UPDATE mensajes SET extraido = 1 WHERE id = ?", (msg_id,))
