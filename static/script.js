@@ -1,107 +1,173 @@
-const btnSend = document.getElementById('btn-send');
-const userInput = document.getElementById('user-input');
-const chatBox = document.getElementById('chat-box');
-const btnAnki = document.getElementById('btn-anki');
+const btnSend = document.getElementById("btn-send");
+const userInput = document.getElementById("user-input");
+const chatBox = document.getElementById("chat-box");
+const btnAnki = document.getElementById("btn-anki");
+const chatList = document.getElementById("chat-list");
+const btnNewChat = document.getElementById("btn-new-chat");
+const chatTitle = document.getElementById("chat-title");
 
-// 🌟 FUNCIÓN TRADUCTORA BLINDADA
+// Variable vital para saber en qué conversación estamos
+let currentChatId = null;
+
 function formatearMarkdown(texto) {
-    let html = texto
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
-
-    // 1. VIÑETAS PRIMERO: Busca un inicio de línea o un salto (\n), posibles espacios, y un asterisco o guion
-    html = html.replace(/(^|\n)\s*[\*-]\s+/g, '$1• ');
-
-    // 2. NEGRITAS: **texto** -> <strong>texto</strong>
-    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-
-    // 3. CURSIVAS: *texto* -> <em>texto</em> (Ya no chocará con las viñetas porque ahora son puntitos)
-    html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
-
-    // 4. SALTOS DE LÍNEA: \n -> <br>
-    html = html.replace(/\n/g, '<br>');
-
-    return html;
+  let html = texto
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  html = html.replace(/(^|\n)\s*[\*-]\s+/g, "$1• ");
+  html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/\*(.*?)\*/g, "<em>$1</em>");
+  html = html.replace(/\n/g, "<br>");
+  return html;
 }
 
-// ==========================================
-// 💬 LÓGICA DE LA CONVERSACIÓN (CHAT)
-// ==========================================
+// 🗂️ 1. Cargar la lista de chats en la barra lateral
+async function cargarChats() {
+  const res = await fetch("/chats");
+  const chats = await res.json();
+  chatList.innerHTML = "";
+
+  chats.forEach((chat) => {
+    const div = document.createElement("div");
+    div.className = "chat-item";
+    div.textContent = chat.titulo;
+    if (chat.id === currentChatId) div.classList.add("active");
+
+    div.onclick = () => abrirChat(chat.id, chat.titulo);
+    chatList.appendChild(div);
+  });
+}
+
+// 📖 2. Abrir un chat específico y cargar su historial
+async function abrirChat(id, titulo) {
+  currentChatId = id;
+  chatTitle.textContent = "🇬🇧 " + titulo;
+  chatBox.innerHTML = "";
+  await cargarChats(); // Refrescar para marcar en azul el chat activo
+
+  const res = await fetch(`/chats/${id}/mensajes`);
+  const mensajes = await res.json();
+
+  if (mensajes.length === 0) {
+    const sysMsg = document.createElement("div");
+    sysMsg.className = "message bot";
+    sysMsg.textContent =
+      "¡Hello! Soy tu tutor de inglés. ¿De qué hablaremos en esta sesión? 🚀";
+    chatBox.appendChild(sysMsg);
+  } else {
+    mensajes.forEach((msg) => {
+      const msgDiv = document.createElement("div");
+      msgDiv.className = msg.rol === "user" ? "message user" : "message bot";
+      if (msg.rol === "bot") {
+        msgDiv.innerHTML = formatearMarkdown(msg.texto);
+      } else {
+        msgDiv.textContent = msg.texto;
+      }
+      chatBox.appendChild(msgDiv);
+    });
+  }
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+// ➕ 3. Botón para crear nuevo chat
+btnNewChat.addEventListener("click", async () => {
+  const titulo = prompt(
+    "Dale un título a esta nueva sesión (Ej. 'Práctica de pasados'):",
+  );
+  if (!titulo) return; // Si el usuario cancela, no hacemos nada
+
+  const res = await fetch("/crear_chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ titulo: titulo }),
+  });
+  const data = await res.json();
+  await abrirChat(data.chat_id, data.titulo); // Abrimos el chat que se acaba de crear
+});
+
+// 💬 4. Enviar un mensaje (ahora incluye el currentChatId)
 async function sendMessage() {
-    const text = userInput.value.trim();
-    if (text === '') return;
+  if (!currentChatId) {
+    alert(
+      "Por favor, selecciona o crea un chat primero usando la barra lateral.",
+    );
+    return;
+  }
 
-    // Dibuja el mensaje del usuario
-    const userMsg = document.createElement('div');
-    userMsg.className = 'message user';
-    userMsg.textContent = text;
-    chatBox.appendChild(userMsg);
+  const text = userInput.value.trim();
+  if (text === "") return;
 
-    userInput.value = '';
+  const userMsg = document.createElement("div");
+  userMsg.className = "message user";
+  userMsg.textContent = text;
+  chatBox.appendChild(userMsg);
+
+  userInput.value = "";
+  chatBox.scrollTop = chatBox.scrollHeight;
+
+  const botMsg = document.createElement("div");
+  botMsg.className = "message bot";
+  botMsg.innerHTML = "<i>Escribiendo...</i>";
+  chatBox.appendChild(botMsg);
+  chatBox.scrollTop = chatBox.scrollHeight;
+
+  try {
+    const response = await fetch("/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ texto: text, chat_id: currentChatId }),
+    });
+
+    const data = await response.json();
+    botMsg.innerHTML = formatearMarkdown(data.respuesta);
     chatBox.scrollTop = chatBox.scrollHeight;
-
-    // Mensaje temporal de "Escribiendo..."
-    const botMsg = document.createElement('div');
-    botMsg.className = 'message bot';
-    botMsg.innerHTML = '<i>Escribiendo...</i>';
-    chatBox.appendChild(botMsg);
-    chatBox.scrollTop = chatBox.scrollHeight;
-
-    try {
-        const response = await fetch('/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ texto: text })
-        });
-
-        const data = await response.json();
-        
-        // Aplicamos el formato con la nueva regla de viñetas
-        botMsg.innerHTML = formatearMarkdown(data.respuesta);
-        chatBox.scrollTop = chatBox.scrollHeight;
-
-    } catch (error) {
-        botMsg.textContent = "Error de red. Asegúrate de que el servidor FastAPI esté encendido.";
-    }
+  } catch (error) {
+    botMsg.textContent = "Error de red.";
+  }
 }
 
-// Escuchadores del chat
-btnSend.addEventListener('click', sendMessage);
-userInput.addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
-        sendMessage();
-    }
+btnSend.addEventListener("click", sendMessage);
+userInput.addEventListener("keypress", (e) => {
+  if (e.key === "Enter") sendMessage();
 });
 
-// ==========================================
-// 🗂️ LÓGICA DEL BOTÓN EXTRAER A ANKI
-// ==========================================
-btnAnki.addEventListener('click', async () => {
-    const textoOriginal = btnAnki.textContent;
-    btnAnki.disabled = true;
-    btnAnki.textContent = "⏳ Extrayendo y generando medios...";
-    btnAnki.style.backgroundColor = "#e67e22";
+// 📥 5. Extraer a Anki (ahora incluye el currentChatId)
+btnAnki.addEventListener("click", async () => {
+  if (!currentChatId) {
+    alert("Selecciona un chat primero.");
+    return;
+  }
 
-    try {
-        const response = await fetch('/extraer', { method: 'POST' });
-        const data = await response.json();
-        
-        const sysMsg = document.createElement('div');
-        sysMsg.className = 'message bot';
-        sysMsg.style.backgroundColor = '#e8f5e9';
-        sysMsg.style.color = '#2e7d32';
-        sysMsg.style.fontWeight = 'bold';
-        sysMsg.textContent = data.mensaje;
-        
-        chatBox.appendChild(sysMsg);
-        chatBox.scrollTop = chatBox.scrollHeight;
-        
-    } catch (err) {
-        alert("Hubo un error de red al intentar extraer las cartas.");
-    } finally {
-        btnAnki.disabled = false;
-        btnAnki.textContent = textoOriginal;
-        btnAnki.style.backgroundColor = "#27ae60";
-    }
+  const textoOriginal = btnAnki.textContent;
+  btnAnki.disabled = true;
+  btnAnki.textContent = "⏳ Procesando...";
+  btnAnki.style.backgroundColor = "#e67e22";
+
+  try {
+    const response = await fetch("/extraer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: currentChatId }),
+    });
+    const data = await response.json();
+
+    const sysMsg = document.createElement("div");
+    sysMsg.className = "message bot";
+    sysMsg.style.backgroundColor = "#e8f5e9";
+    sysMsg.style.color = "#2e7d32";
+    sysMsg.style.fontWeight = "bold";
+    sysMsg.textContent = data.mensaje;
+
+    chatBox.appendChild(sysMsg);
+    chatBox.scrollTop = chatBox.scrollHeight;
+  } catch (err) {
+    alert("Hubo un error de red al intentar extraer.");
+  } finally {
+    btnAnki.disabled = false;
+    btnAnki.textContent = textoOriginal;
+    btnAnki.style.backgroundColor = "#27ae60";
+  }
 });
+
+// 🚀 AL INICIAR: Cargar la lista de chats automáticamente
+cargarChats();

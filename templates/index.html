@@ -1,29 +1,38 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tutor de Inglés IA</title>
-    <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <div class="app-container">
+      <div class="sidebar">
+        <button id="btn-new-chat" class="new-chat-btn">+ Nuevo Chat</button>
+        <div id="chat-list" class="chat-list"></div>
+      </div>
 
-    <div class="chat-container">
+      <div class="chat-container">
         <div class="header">
-            <h2>🇬🇧 Tutor IA</h2>
-            <button class="anki-btn" id="btn-anki">Extraer a Anki</button>
+          <h2 id="chat-title">🇬🇧 Tutor IA</h2>
+          <button class="anki-btn" id="btn-anki">Extraer a Anki</button>
         </div>
 
-        <div class="chat-box" id="chat-box">
-            <div class="message bot">¡Hello! Soy tu tutor de inglés. Pregúntame lo que quieras o empecemos a conversar. Cuando sientas que aprendiste algo útil, presiona el botón de Anki. 🚀</div>
-        </div>
+        <div class="chat-box" id="chat-box"></div>
 
         <div class="input-area">
-            <input type="text" id="user-input" placeholder="Escribe tu mensaje aquí..." autocomplete="off">
-            <button class="send-btn" id="btn-send">Enviar</button>
+          <input
+            type="text"
+            id="user-input"
+            placeholder="Escribe tu mensaje aquí..."
+            autocomplete="off"
+          />
+          <button class="send-btn" id="btn-send">Enviar</button>
         </div>
+      </div>
     </div>
 
     <script src="/static/script.js"></script>
-</body>
+  </body>
 </html>
