@@ -69,20 +69,46 @@ async function abrirChat(id, titulo) {
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// ➕ 3. Botón para crear nuevo chat
-btnNewChat.addEventListener("click", async () => {
-  const titulo = prompt(
-    "Dale un título a esta nueva sesión (Ej. 'Práctica de pasados'):",
-  );
-  if (!titulo) return; // Si el usuario cancela, no hacemos nada
+// Capturamos los nuevos elementos visuales
+const newChatForm = document.getElementById('new-chat-form');
+const newChatInput = document.getElementById('new-chat-input');
+const btnConfirmChat = document.getElementById('btn-confirm-chat');
+const btnCancelChat = document.getElementById('btn-cancel-chat');
 
-  const res = await fetch("/crear_chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ titulo: titulo }),
-  });
-  const data = await res.json();
-  await abrirChat(data.chat_id, data.titulo); // Abrimos el chat que se acaba de crear
+// ➕ 3. Lógica moderna para crear nuevo chat
+btnNewChat.addEventListener('click', () => {
+    btnNewChat.style.display = 'none'; // Ocultamos el botón
+    newChatForm.style.display = 'flex'; // Mostramos el mini-formulario
+    newChatInput.focus(); // Ponemos el cursor ahí automáticamente
+});
+
+btnCancelChat.addEventListener('click', () => {
+    newChatForm.style.display = 'none';
+    btnNewChat.style.display = 'block';
+    newChatInput.value = ''; // Limpiamos la caja
+});
+
+async function crearNuevoChat() {
+    const titulo = newChatInput.value.trim();
+    if (!titulo) return;
+
+    // Restauramos la interfaz a la normalidad
+    newChatForm.style.display = 'none';
+    btnNewChat.style.display = 'block';
+    newChatInput.value = '';
+
+    const res = await fetch('/crear_chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ titulo: titulo })
+    });
+    const data = await res.json();
+    await abrirChat(data.chat_id, data.titulo);
+}
+
+btnConfirmChat.addEventListener('click', crearNuevoChat);
+newChatInput.addEventListener('keypress', e => { 
+    if (e.key === 'Enter') crearNuevoChat(); 
 });
 
 // 💬 4. Enviar un mensaje (ahora incluye el currentChatId)

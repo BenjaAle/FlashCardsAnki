@@ -10,7 +10,14 @@ env/
 # ignorar archivosAntiguos
 archivosAntiguos/
 
-
-lectura.txt
 *.csv
 *.json
+
+# Ignorar archivos de logs
+logs/
+
+# Ignorar base de datos
+*.db
+*.sqlite3
+
+

@@ -10,6 +10,61 @@
     <div class="app-container">
       <div class="sidebar">
         <button id="btn-new-chat" class="new-chat-btn">+ Nuevo Chat</button>
+
+        <div
+          id="new-chat-form"
+          style="
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 20px;
+          "
+        >
+          <input
+            type="text"
+            id="new-chat-input"
+            placeholder="Nombre de la sesión..."
+            style="
+              padding: 10px;
+              border-radius: 6px;
+              border: none;
+              font-size: 14px;
+            "
+          />
+          <div style="display: flex; gap: 5px">
+            <button
+              id="btn-confirm-chat"
+              style="
+                flex: 1;
+                background: #27ae60;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                padding: 8px;
+                font-weight: bold;
+              "
+            >
+              Crear
+            </button>
+            <button
+              id="btn-cancel-chat"
+              style="
+                flex: 1;
+                background: #e74c3c;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                padding: 8px;
+                font-weight: bold;
+              "
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+
         <div id="chat-list" class="chat-list"></div>
       </div>
 
