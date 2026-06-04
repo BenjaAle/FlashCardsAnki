@@ -45,9 +45,9 @@ def iniciar_bd():
     c.execute(
         """CREATE TABLE IF NOT EXISTS chats (id INTEGER PRIMARY KEY AUTOINCREMENT, titulo TEXT)"""
     )
-    # Tabla para guardar los mensajes de cada chat
+    # Tabla para guardar los mensajes de cada chat (extraidos para memoria y extracción a Anki)
     c.execute(
-        """CREATE TABLE IF NOT EXISTS mensajes (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER, rol TEXT, texto TEXT)"""
+        """CREATE TABLE IF NOT EXISTS mensajes (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER, rol TEXT, texto TEXT, extraido INTEGER DEFAULT 0)"""
     )
     conn.commit()
     conn.close()
@@ -200,7 +200,7 @@ def extraer_anki(req: ExtraerRequest):
     conn = sqlite3.connect("tutor.db")
     c = conn.cursor()
     c.execute(
-        "SELECT rol, texto FROM mensajes WHERE chat_id = ? ORDER BY id ASC",
+        "SELECT id, rol, texto FROM mensajes WHERE chat_id = ? AND extraido = 0 ORDER BY id ASC",
         (req.chat_id,),
     )
     historial_bd = c.fetchall()
@@ -213,7 +213,9 @@ def extraer_anki(req: ExtraerRequest):
 
     # Convertimos la base de datos a texto para el Prompt
     historial_texto = ""
-    for rol, texto in historial_bd:
+    # Recolectamos los IDs para marcarlos como extraídos después
+    ids_mensajes = []
+    for msg_id, rol, texto in historial_bd:
         quien = "Alumno" if rol == "user" else "Tutor"
         historial_texto += f"{quien}: {texto}\n\n"
 
@@ -245,7 +247,7 @@ def extraer_anki(req: ExtraerRequest):
     1. El significado en español (destaca lo importante con <b>).
     2. La oración de ejemplo en inglés completa.
     3. La traducción de esa oración al español (en <i>).
-    Usa <br> para separar.
+    IMPORTANTE PARA EL FORMATO: Usa obligatoriamente una doble línea en blanco (<br><br>) para separar la definición inicial de los ejemplos, y también para separar un ejemplo de otro. Usa una sola línea (<br>) ÚNICAMENTE para separar la oración en inglés de su propia traducción al español.
 
     Historial a procesar:
     {historial_texto}
@@ -384,11 +386,19 @@ def extraer_anki(req: ExtraerRequest):
             except:
                 pass
 
+        for msg_id in ids_mensajes:
+            c.execute("UPDATE mensajes SET extraido = 1 WHERE id = ?", (msg_id,))
+        conn.commit()
+        conn.close()
+
         return {
             "mensaje": f"🎉 ¡Éxito! Se inyectaron {cartas_agregadas} cartas organizadas en sus submazos."
         }
 
+    # 🌟 NUEVO: Si llegamos hasta aquí, marcamos esos mensajes específicos como extraídos (1)
     except Exception as e:
+        if "conn" in locals():
+            conn.close()
         return {"mensaje": f"⚠️ Error en el procesamiento: {str(e)}"}
 
 
