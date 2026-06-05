@@ -15,7 +15,11 @@ function formatearMarkdown(texto) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
     
-  // 🌟 NUEVO: Enseñar a leer los títulos de Markdown (H1, H2, H3)
+  // 🌟 Enseñar a leer TODOS los títulos de Markdown (H1 hasta H6)
+  // Es importante ir del más grande (######) al más chico (#)
+  html = html.replace(/^###### (.*$)/gim, "<h6>$1</h6>");
+  html = html.replace(/^##### (.*$)/gim, "<h5>$1</h5>");
+  html = html.replace(/^#### (.*$)/gim, "<h4>$1</h4>");
   html = html.replace(/^### (.*$)/gim, "<h3>$1</h3>");
   html = html.replace(/^## (.*$)/gim, "<h2>$1</h2>");
   html = html.replace(/^# (.*$)/gim, "<h1>$1</h1>");
@@ -26,6 +30,9 @@ function formatearMarkdown(texto) {
   html = html.replace(/\n/g, "<br>");
   
   // Limpieza visual: Quita los saltos de línea extra debajo de los títulos
+  html = html.replace(/<\/h6><br>/g, "</h6>");
+  html = html.replace(/<\/h5><br>/g, "</h5>");
+  html = html.replace(/<\/h4><br>/g, "</h4>");
   html = html.replace(/<\/h3><br>/g, "</h3>");
   html = html.replace(/<\/h2><br>/g, "</h2>");
   html = html.replace(/<\/h1><br>/g, "</h1>");
@@ -211,6 +218,7 @@ async function sendMessage() {
   chatBox.appendChild(userMsg);
 
   userInput.value = "";
+  userInput.style.height = "auto"; // 👈 ¡LÍNEA NUEVA! Restaura el tamaño de la caja
   chatBox.scrollTop = chatBox.scrollHeight;
 
   const botMsg = document.createElement("div");
@@ -235,8 +243,19 @@ async function sendMessage() {
 }
 
 btnSend.addEventListener("click", sendMessage);
-userInput.addEventListener("keypress", (e) => {
-  if (e.key === "Enter") sendMessage();
+
+// Enviar con Enter, salto de línea con Shift + Enter
+userInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault(); // Evita que se dibuje un salto de línea accidental
+    sendMessage();
+  }
+});
+
+// Autoajustar la altura de la caja mientras el usuario escribe o pega texto
+userInput.addEventListener("input", function () {
+  this.style.height = "auto"; // Resetea la altura para calcular bien
+  this.style.height = this.scrollHeight + "px"; // Expande según el contenido
 });
 
 // Capturamos los nuevos elementos del modal

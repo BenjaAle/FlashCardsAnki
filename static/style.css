@@ -169,12 +169,32 @@ body {
   align-self: flex-end;
   border-bottom-right-radius: 0;
 }
-
+/* Contenedor del área de escritura */
 .input-area {
   display: flex;
+  align-items: flex-end; /* Ancla el botón Enviar a la parte de abajo */
   padding: 20px;
-  background: white;
+  background-color: #ffffff;
   border-top: 1px solid #e2e8f0;
+}
+.input-area textarea {
+  flex: 1;
+  padding: 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 15px;
+  font-family: inherit;
+  resize: none; /* Evita que el usuario la redimensione manualmente */
+  overflow-y: auto; /* Agrega scroll solo si supera la altura máxima */
+  max-height: 150px; /* Altura máxima antes de usar scroll */
+  min-height: 24px;
+  line-height: 1.4;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.input-area textarea:focus {
+  border-color: #3b82f6;
 }
 input {
   flex: 1;
