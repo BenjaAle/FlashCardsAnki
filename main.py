@@ -77,6 +77,11 @@ class ExtraerRequest(BaseModel):
     chat_id: int
 
 
+# Estructura para renombrar
+class RenombrarRequest(BaseModel):
+    titulo: str
+
+
 # ==========================================
 # 🔌 FUNCIONES DE ANKI
 # ==========================================
@@ -127,6 +132,29 @@ def obtener_chats():
     return chats
 
 
+# 🌟 NUEVA RUTA: Renombrar un chat
+@app.put("/chats/{chat_id}")
+def renombrar_chat(chat_id: int, req: RenombrarRequest):
+    conn = sqlite3.connect("tutor.db")
+    c = conn.cursor()
+    c.execute("UPDATE chats SET titulo = ? WHERE id = ?", (req.titulo, chat_id))
+    conn.commit()
+    conn.close()
+    return {"mensaje": "Renombrado exitosamente"}
+
+
+# 🌟 NUEVA RUTA: Eliminar un chat (y sus mensajes)
+@app.delete("/chats/{chat_id}")
+def eliminar_chat(chat_id: int):
+    conn = sqlite3.connect("tutor.db")
+    c = conn.cursor()
+    c.execute("DELETE FROM chats WHERE id = ?", (chat_id,))
+    c.execute("DELETE FROM mensajes WHERE chat_id = ?", (chat_id,))
+    conn.commit()
+    conn.close()
+    return {"mensaje": "Eliminado exitosamente"}
+
+
 # 3. Obtener los mensajes antiguos de un chat específico
 @app.get("/chats/{chat_id}/mensajes")
 def obtener_mensajes(chat_id: int):
@@ -156,10 +184,11 @@ def conversar(mensaje: Mensaje):
 
         # B) Reconstruimos la memoria para Gemini leyendo la base de datos
         c.execute(
-            "SELECT rol, texto FROM mensajes WHERE chat_id = ? ORDER BY id ASC",
+            "SELECT rol, texto FROM mensajes WHERE chat_id = ? ORDER BY id DESC LIMIT 12",
             (mensaje.chat_id,),
         )
         historial_bd = c.fetchall()
+        historial_bd.reverse() # Los invertimos para que queden en orden cronológico correcto (del más viejo al más nuevo)
 
         historial_gemini = []
         # Pasamos todos los mensajes menos el último (que es el que enviaremos ahora)
@@ -195,40 +224,43 @@ def conversar(mensaje: Mensaje):
 
 
 # 5. Extraer cartas a Anki leyendo directamente de la Base de Datos
-@app.post("/extraer")
-def extraer_anki(req: ExtraerRequest):
+# Definimos la nueva estructura de datos que enviará el navegador para la inyección final
+class InyectarRequest(BaseModel):
+    chat_id: int
+    cartas: list
+
+
+# 🌟 NUEVA RUTA 1: Analiza el chat y propone las cartas en JSON puro
+@app.post("/proponer_cartas")
+def proponer_cartas(req: ExtraerRequest):
     conn = sqlite3.connect("tutor.db")
     c = conn.cursor()
     c.execute(
-        "SELECT id, rol, texto FROM mensajes WHERE chat_id = ? AND extraido = 0 ORDER BY id ASC",
+        "SELECT rol, texto FROM mensajes WHERE chat_id = ? AND extraido = 0 ORDER BY id ASC",
         (req.chat_id,),
     )
     historial_bd = c.fetchall()
     conn.close()
 
     if not historial_bd:
-        return {
-            "mensaje": "⚠️ No hay conversación aún para extraer. ¡Hablemos primero!"
-        }
+        return {"error": "⚠️ No hay vocabulario nuevo desde la última extracción."}
 
-    # Convertimos la base de datos a texto para el Prompt
     historial_texto = ""
-    # Recolectamos los IDs para marcarlos como extraídos después
-    ids_mensajes = []
-    for msg_id, rol, texto in historial_bd:
+    for rol, texto in historial_bd:
         quien = "Alumno" if rol == "user" else "Tutor"
         historial_texto += f"{quien}: {texto}\n\n"
 
     prompt = f"""
     Eres un creador de flashcards experto. Analiza el siguiente historial de conversación entre un alumno y su tutor de inglés.
     REGLA 1: Extrae ÚNICAMENTE el vocabulario útil, phrasal verbs, o correcciones clave. Si no hay nada útil, devuelve []
-    REGLA 2: Devuelve ESTRICTAMENTE un arreglo JSON puro sin formato markdown.
+    REGLA 2: Devuelve ESTRICTAMENTE un arreglo JSON puro sin formato markdown ni bloques ```json.
     Formato esperado:
     [
       {{
         "frente": "Palabra o concepto",
-        "reverso": "Definición en HTML",
+        "reverso": "Definición básica en español",
         "ejemplo_ingles": "Oración de ejemplo en inglés.",
+        "ejemplo_espanol": "Traducción natural de la oración de ejemplo al español.",
         "termino_imagen": "Palabra clave visual en inglés o vacío.",
         "categoria": "ELIGE_UNA_CATEGORIA"
       }}
@@ -242,12 +274,6 @@ def extraer_anki(req: ExtraerRequest):
     - Expresiones Nativas
     - Colocaciones
     - Otros
-
-    REGLA 4: El campo "reverso" DEBE contener obligatoriamente:
-    1. El significado en español (destaca lo importante con <b>).
-    2. La oración de ejemplo en inglés completa.
-    3. La traducción de esa oración al español (en <i>).
-    IMPORTANTE PARA EL FORMATO: Usa obligatoriamente una doble línea en blanco (<br><br>) para separar la definición inicial de los ejemplos, y también para separar un ejemplo de otro. Usa una sola línea (<br>) ÚNICAMENTE para separar la oración en inglés de su propia traducción al español.
 
     Historial a procesar:
     {historial_texto}
@@ -269,15 +295,23 @@ def extraer_anki(req: ExtraerRequest):
         else:
             lista_cartas = datos_brutos if isinstance(datos_brutos, list) else []
 
-        if not lista_cartas:
-            return {
-                "mensaje": "🤷‍♂️ No encontré vocabulario nuevo en esta charla para crear cartas."
-            }
+        return {"cartas": lista_cartas}
+    except Exception as e:
+        return {"error": f"Error al generar propuestas: {str(e)}"}
+
+
+# 🌟 NUEVA RUTA 2: Toma las cartas editadas, genera medios e inyecta a Anki
+@app.post("/inyectar_cartas")
+def inyectar_cartas(req: InyectarRequest):
+    try:
+        if not req.cartas:
+            return {"mensaje": "🤷‍♂️ No se enviaron cartas para inyectar."}
 
         cartas_agregadas = 0
-        for i, carta in enumerate(lista_cartas):
+
+        for i, carta in enumerate(req.cartas):
             texto_frente = str(carta.get("frente", "")).strip()
-            texto_reverso = str(carta.get("reverso", "")).strip()
+            texto_reverso_base = str(carta.get("reverso", "")).strip()
             texto_ejemplo = str(carta.get("ejemplo_ingles", "")).strip()
             termino_imagen = str(carta.get("termino_imagen", "")).strip()
 
@@ -306,6 +340,31 @@ def extraer_anki(req: ExtraerRequest):
                 c if c.isalnum() else "_" for c in texto_frente[:15]
             )
 
+            # 🌟 NUEVO: Función para traducir Markdown (**) a HTML (<b>) para Anki
+            def md_a_html(texto):
+                texto = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", texto)
+                texto = re.sub(r"\*(.*?)\*", r"<i>\1</i>", texto)
+                return texto
+
+            texto_frente_html = md_a_html(texto_frente)
+            texto_reverso_base_html = md_a_html(texto_reverso_base)
+            texto_ejemplo_html = md_a_html(texto_ejemplo)
+            traduccion_ejemplo = str(carta.get("ejemplo_espanol", "")).strip()
+            traduccion_ejemplo_html = md_a_html(traduccion_ejemplo)
+
+            # Construimos el reverso final estandarizado con HTML real
+            if "<br>" in texto_reverso_base_html:
+                texto_reverso_final = texto_reverso_base_html
+            else:
+                texto_reverso_final = f"<b>{texto_reverso_base_html}</b>"
+
+            if texto_ejemplo_html:
+                if traduccion_ejemplo_html:
+                    texto_reverso_final += f"<br><br>{texto_ejemplo_html}<br><i>{traduccion_ejemplo_html}</i>"
+                else:
+                    texto_reverso_final += f"<br><br>{texto_ejemplo_html}"
+
+            # 1. IMAGEN DE PEXELS
             if termino_imagen:
                 try:
                     url_busqueda = f"https://api.pexels.com/v1/search?query={termino_imagen}&per_page=1"
@@ -325,16 +384,23 @@ def extraer_anki(req: ExtraerRequest):
                                 filename=nombre_archivo_img,
                                 data=base64.b64encode(img_data).decode("utf-8"),
                             )
-                            texto_reverso = (
+                            texto_reverso_final = (
                                 f"<img src='{nombre_archivo_img}'><br><br>"
-                                + texto_reverso
+                                + texto_reverso_final
                             )
                 except:
                     pass
 
+            # 2. AUDIO FRENTE
             nombre_archivo_frente = f"ia_audio_frente_{nombre_limpio}_{i}.mp3"
             try:
-                texto_audio_frente = re.sub(r"\(.*?\)", "", texto_frente).strip()
+                # Quitamos paréntesis y asteriscos para que la voz robótica suene limpia
+                texto_audio_frente = (
+                    re.sub(r"\(.*?\)", "", texto_frente)
+                    .replace("**", "")
+                    .replace("*", "")
+                    .strip()
+                )
                 gTTS(texto_audio_frente, lang="en").save(nombre_archivo_frente)
                 with open(nombre_archivo_frente, "rb") as f:
                     invoke_anki(
@@ -342,24 +408,29 @@ def extraer_anki(req: ExtraerRequest):
                         filename=nombre_archivo_frente,
                         data=base64.b64encode(f.read()).decode("utf-8"),
                     )
-                texto_frente += f" [sound:{nombre_archivo_frente}]"
+                texto_frente_html += f" [sound:{nombre_archivo_frente}]"
             except:
                 pass
             finally:
                 if os.path.exists(nombre_archivo_frente):
                     os.remove(nombre_archivo_frente)
 
+            # 3. AUDIO EJEMPLO
             if texto_ejemplo:
                 nombre_archivo_ejemplo = f"ia_audio_ejemplo_{nombre_limpio}_{i}.mp3"
                 try:
-                    gTTS(texto_ejemplo, lang="en").save(nombre_archivo_ejemplo)
+                    # Limpiamos asteriscos para el audio
+                    texto_audio_ejemplo = (
+                        texto_ejemplo.replace("**", "").replace("*", "").strip()
+                    )
+                    gTTS(texto_audio_ejemplo, lang="en").save(nombre_archivo_ejemplo)
                     with open(nombre_archivo_ejemplo, "rb") as f:
                         invoke_anki(
                             "storeMediaFile",
                             filename=nombre_archivo_ejemplo,
                             data=base64.b64encode(f.read()).decode("utf-8"),
                         )
-                    texto_reverso += (
+                    texto_reverso_final += (
                         f"<br><br>🔊 <b>Listen:</b> [sound:{nombre_archivo_ejemplo}]"
                     )
                 except:
@@ -368,6 +439,7 @@ def extraer_anki(req: ExtraerRequest):
                     if os.path.exists(nombre_archivo_ejemplo):
                         os.remove(nombre_archivo_ejemplo)
 
+            # 4. INYECTAR A ANKI
             try:
                 invoke_anki(
                     "addNote",
@@ -375,8 +447,8 @@ def extraer_anki(req: ExtraerRequest):
                         "deckName": mazo_destino,
                         "modelName": NOMBRE_TIPO_CARTA,
                         "fields": {
-                            CAMPO_FRENTE: texto_frente,
-                            CAMPO_REVERSO: texto_reverso,
+                            CAMPO_FRENTE: texto_frente_html,
+                            CAMPO_REVERSO: texto_reverso_final,
                         },
                         "options": {"allowDuplicate": False},
                         "tags": ["generado_por_ia_python"],
@@ -384,16 +456,15 @@ def extraer_anki(req: ExtraerRequest):
                 )
                 cartas_agregadas += 1
             except Exception as e:
-                # 🌟 EL PLAN B: Si falla porque es duplicado, y la IA nos dio un ejemplo, creamos una carta de frase
                 if texto_ejemplo and "duplicate" in str(e).lower():
-                    # El nuevo frente será la oración en inglés y su audio
-                    frente_alternativo = texto_ejemplo
-                    if "nombre_archivo_ejemplo" in locals():
+                    frente_alternativo = texto_ejemplo_html
+                    if (
+                        os.path.exists(nombre_archivo_ejemplo)
+                        or "nombre_archivo_ejemplo" in locals()
+                    ):
                         frente_alternativo += f" [sound:{nombre_archivo_ejemplo}]"
 
-                    # El nuevo reverso recordará cuál era la palabra objetivo y mostrará toda la explicación
-                    reverso_alternativo = f"🎯 <b>Contexto original:</b> {texto_frente}<br><br>{texto_reverso}"
-
+                    reverso_alternativo = f"🎯 <b>Contexto original:</b> {texto_frente_html}<br><br>{texto_reverso_final}"
                     try:
                         invoke_anki(
                             "addNote",
@@ -411,23 +482,23 @@ def extraer_anki(req: ExtraerRequest):
                         cartas_agregadas += 1
                     except:
                         pass
-                else:
-                    pass
 
-        for msg_id in ids_mensajes:
-            c.execute("UPDATE mensajes SET extraido = 1 WHERE id = ?", (msg_id,))
+        # Marcar los mensajes como extraídos
+        conn = sqlite3.connect("tutor.db")
+        c = conn.cursor()
+        c.execute(
+            "UPDATE mensajes SET extraido = 1 WHERE chat_id = ? AND extraido = 0",
+            (req.chat_id,),
+        )
         conn.commit()
         conn.close()
 
         return {
-            "mensaje": f"🎉 ¡Éxito! Se inyectaron {cartas_agregadas} cartas organizadas en sus submazos."
+            "mensaje": f"🎉 ¡Éxito! Se inyectaron {cartas_agregadas} cartas revisadas y personalizadas por ti."
         }
 
-    # 🌟 NUEVO: Si llegamos hasta aquí, marcamos esos mensajes específicos como extraídos (1)
     except Exception as e:
-        if "conn" in locals():
-            conn.close()
-        return {"mensaje": f"⚠️ Error en el procesamiento: {str(e)}"}
+        return {"mensaje": f"⚠️ Error en el procesamiento final: {str(e)}"}
 
 
 # uvicorn main:app --reload

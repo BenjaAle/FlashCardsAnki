@@ -14,14 +14,27 @@ function formatearMarkdown(texto) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
+    
+  // 🌟 NUEVO: Enseñar a leer los títulos de Markdown (H1, H2, H3)
+  html = html.replace(/^### (.*$)/gim, "<h3>$1</h3>");
+  html = html.replace(/^## (.*$)/gim, "<h2>$1</h2>");
+  html = html.replace(/^# (.*$)/gim, "<h1>$1</h1>");
+
   html = html.replace(/(^|\n)\s*[\*-]\s+/g, "$1• ");
   html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
   html = html.replace(/\*(.*?)\*/g, "<em>$1</em>");
   html = html.replace(/\n/g, "<br>");
+  
+  // Limpieza visual: Quita los saltos de línea extra debajo de los títulos
+  html = html.replace(/<\/h3><br>/g, "</h3>");
+  html = html.replace(/<\/h2><br>/g, "</h2>");
+  html = html.replace(/<\/h1><br>/g, "</h1>");
+  
   return html;
 }
 
 // 🗂️ 1. Cargar la lista de chats en la barra lateral
+// 🗂️ 1. Cargar la lista de chats (AHORA CON BOTONES DE EDITAR Y BORRAR)
 async function cargarChats() {
   const res = await fetch("/chats");
   const chats = await res.json();
@@ -30,10 +43,79 @@ async function cargarChats() {
   chats.forEach((chat) => {
     const div = document.createElement("div");
     div.className = "chat-item";
-    div.textContent = chat.titulo;
     if (chat.id === currentChatId) div.classList.add("active");
 
-    div.onclick = () => abrirChat(chat.id, chat.titulo);
+    // Contenedor del título (Al hacer clic aquí, abre el chat)
+    const titleSpan = document.createElement("span");
+    titleSpan.className = "chat-item-title";
+    titleSpan.textContent = chat.titulo;
+    titleSpan.onclick = () => abrirChat(chat.id, chat.titulo);
+
+    // Contenedor de las herramientas (Lápiz y Basurero)
+    const actionsDiv = document.createElement("div");
+    actionsDiv.className = "chat-item-actions";
+
+    // Botón Editar (Renombrado elegante sin alertas)
+    const btnEdit = document.createElement("button");
+    btnEdit.className = "action-btn";
+    btnEdit.textContent = "✏️";
+    btnEdit.title = "Renombrar";
+    btnEdit.onclick = (e) => {
+      e.stopPropagation(); // Evita que se abra el chat al hacer clic en el botón
+
+      // Convertimos el texto en una cajita de texto (input)
+      titleSpan.innerHTML = `<input type="text" id="edit-input-${chat.id}" value="${chat.titulo}" style="width: 100%; padding: 2px; color: black; border-radius: 3px; border: none; font-size: 13px;">`;
+      const input = document.getElementById(`edit-input-${chat.id}`);
+      input.focus();
+
+      // Función para guardar cuando el usuario termine
+      const guardarCambio = async () => {
+        const nuevoTitulo = input.value.trim();
+        // Si escribió algo nuevo, lo guardamos en la base de datos
+        if (nuevoTitulo && nuevoTitulo !== chat.titulo) {
+          await fetch(`/chats/${chat.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ titulo: nuevoTitulo }),
+          });
+          if (currentChatId === chat.id)
+            chatTitle.textContent = "🇬🇧 " + nuevoTitulo;
+        }
+        cargarChats(); // Refrescamos la lista
+      };
+
+      input.addEventListener("blur", guardarCambio); // Guarda si hace clic afuera
+      input.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") guardarCambio();
+      }); // Guarda si presiona Enter
+    };
+
+    // Botón Eliminar
+    const btnDelete = document.createElement("button");
+    btnDelete.className = "action-btn";
+    btnDelete.textContent = "🗑️";
+    btnDelete.title = "Eliminar";
+    btnDelete.onclick = async (e) => {
+      e.stopPropagation();
+
+      // Borrado instantáneo a la base de datos
+      await fetch(`/chats/${chat.id}`, { method: "DELETE" });
+
+      // Si eliminaste el chat que tenías abierto, limpiamos la pantalla principal
+      if (currentChatId === chat.id) {
+        currentChatId = null;
+        chatBox.innerHTML = "";
+        chatTitle.textContent = "🇬🇧 Tutor IA";
+      }
+
+      cargarChats(); // Refrescamos la lista automáticamente
+    };
+
+    // Ensamblamos las piezas
+    actionsDiv.appendChild(btnEdit);
+    actionsDiv.appendChild(btnDelete);
+    div.appendChild(titleSpan);
+    div.appendChild(actionsDiv);
     chatList.appendChild(div);
   });
 }
@@ -70,45 +152,45 @@ async function abrirChat(id, titulo) {
 }
 
 // Capturamos los nuevos elementos visuales
-const newChatForm = document.getElementById('new-chat-form');
-const newChatInput = document.getElementById('new-chat-input');
-const btnConfirmChat = document.getElementById('btn-confirm-chat');
-const btnCancelChat = document.getElementById('btn-cancel-chat');
+const newChatForm = document.getElementById("new-chat-form");
+const newChatInput = document.getElementById("new-chat-input");
+const btnConfirmChat = document.getElementById("btn-confirm-chat");
+const btnCancelChat = document.getElementById("btn-cancel-chat");
 
 // ➕ 3. Lógica moderna para crear nuevo chat
-btnNewChat.addEventListener('click', () => {
-    btnNewChat.style.display = 'none'; // Ocultamos el botón
-    newChatForm.style.display = 'flex'; // Mostramos el mini-formulario
-    newChatInput.focus(); // Ponemos el cursor ahí automáticamente
+btnNewChat.addEventListener("click", () => {
+  btnNewChat.style.display = "none"; // Ocultamos el botón
+  newChatForm.style.display = "flex"; // Mostramos el mini-formulario
+  newChatInput.focus(); // Ponemos el cursor ahí automáticamente
 });
 
-btnCancelChat.addEventListener('click', () => {
-    newChatForm.style.display = 'none';
-    btnNewChat.style.display = 'block';
-    newChatInput.value = ''; // Limpiamos la caja
+btnCancelChat.addEventListener("click", () => {
+  newChatForm.style.display = "none";
+  btnNewChat.style.display = "block";
+  newChatInput.value = ""; // Limpiamos la caja
 });
 
 async function crearNuevoChat() {
-    const titulo = newChatInput.value.trim();
-    if (!titulo) return;
+  const titulo = newChatInput.value.trim();
+  if (!titulo) return;
 
-    // Restauramos la interfaz a la normalidad
-    newChatForm.style.display = 'none';
-    btnNewChat.style.display = 'block';
-    newChatInput.value = '';
+  // Restauramos la interfaz a la normalidad
+  newChatForm.style.display = "none";
+  btnNewChat.style.display = "block";
+  newChatInput.value = "";
 
-    const res = await fetch('/crear_chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ titulo: titulo })
-    });
-    const data = await res.json();
-    await abrirChat(data.chat_id, data.titulo);
+  const res = await fetch("/crear_chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ titulo: titulo }),
+  });
+  const data = await res.json();
+  await abrirChat(data.chat_id, data.titulo);
 }
 
-btnConfirmChat.addEventListener('click', crearNuevoChat);
-newChatInput.addEventListener('keypress', e => { 
-    if (e.key === 'Enter') crearNuevoChat(); 
+btnConfirmChat.addEventListener("click", crearNuevoChat);
+newChatInput.addEventListener("keypress", (e) => {
+  if (e.key === "Enter") crearNuevoChat();
 });
 
 // 💬 4. Enviar un mensaje (ahora incluye el currentChatId)
@@ -157,43 +239,140 @@ userInput.addEventListener("keypress", (e) => {
   if (e.key === "Enter") sendMessage();
 });
 
-// 📥 5. Extraer a Anki (ahora incluye el currentChatId)
+// Capturamos los nuevos elementos del modal
+const modalRevision = document.getElementById("modal-revision");
+const listaRevision = document.getElementById("lista-revision");
+const btnConfirmarTodo = document.getElementById("btn-confirmar-todo");
+const btnCerrarModal = document.getElementById("btn-cerrar-modal");
+
+// 📥 5. NUEVA LÓGICA: Extraer -> Revisar -> Inyectar
 btnAnki.addEventListener("click", async () => {
-  if (!currentChatId) {
-    alert("Selecciona un chat primero.");
-    return;
-  }
+  if (!currentChatId) return alert("Selecciona un chat primero.");
 
   const textoOriginal = btnAnki.textContent;
   btnAnki.disabled = true;
-  btnAnki.textContent = "⏳ Procesando...";
-  btnAnki.style.backgroundColor = "#e67e22";
+  btnAnki.textContent = "⏳ Analizando chat...";
 
   try {
-    const response = await fetch("/extraer", {
+    const res = await fetch("/proponer_cartas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: currentChatId }),
     });
-    const data = await response.json();
+    const data = await res.json();
 
-    const sysMsg = document.createElement("div");
-    sysMsg.className = "message bot";
-    sysMsg.style.backgroundColor = "#e8f5e9";
-    sysMsg.style.color = "#2e7d32";
-    sysMsg.style.fontWeight = "bold";
-    sysMsg.textContent = data.mensaje;
-
-    chatBox.appendChild(sysMsg);
-    chatBox.scrollTop = chatBox.scrollHeight;
+    if (data.error) {
+      alert(data.error);
+    } else if (data.cartas.length === 0) {
+      alert("🤷‍♂️ Gemini no encontró vocabulario nuevo para extraer.");
+    } else {
+      abrirModalRevision(data.cartas);
+    }
   } catch (err) {
-    alert("Hubo un error de red al intentar extraer.");
+    alert("Error al conectar con el servidor.");
   } finally {
     btnAnki.disabled = false;
     btnAnki.textContent = textoOriginal;
-    btnAnki.style.backgroundColor = "#27ae60";
   }
 });
+
+// Función para dibujar las cartas en el modal
+function abrirModalRevision(cartas) {
+  listaRevision.innerHTML = ""; // Limpiamos
+
+  cartas.forEach((carta, index) => {
+    const cardDiv = document.createElement("div");
+    cardDiv.className = "card-revision";
+    cardDiv.dataset.index = index;
+
+    cardDiv.innerHTML = `
+            <span class="delete-card" onclick="this.parentElement.remove()">✕ Eliminar</span>
+            <div class="grid-edit">
+                <div class="field-group">
+                    <label>Frente (Concepto)</label>
+                    <input type="text" class="edit-frente" value="${carta.frente}">
+                </div>
+                <div class="field-group">
+                    <label>Categoría</label>
+                    <select class="edit-categoria">
+                        <option value="Vocabulario" ${carta.categoria === "Vocabulario" ? "selected" : ""}>Vocabulario</option>
+                        <option value="Phrasal Verbs" ${carta.categoria === "Phrasal Verbs" ? "selected" : ""}>Phrasal Verbs</option>
+                        <option value="Falsos Amigos" ${carta.categoria === "Falsos Amigos" ? "selected" : ""}>Falsos Amigos</option>
+                        <option value="Verbos Irregulares" ${carta.categoria === "Verbos Irregulares" ? "selected" : ""}>Verbos Irregulares</option>
+                        <option value="Gramatica y Teoria" ${carta.categoria === "Gramatica y Teoria" ? "selected" : ""}>Gramatica y Teoria</option>
+                        <option value="Expresiones Nativas" ${carta.categoria === "Expresiones Nativas" ? "selected" : ""}>Expresiones Nativas</option>
+                        <option value="Colocaciones" ${carta.categoria === "Colocaciones" ? "selected" : ""}>Colocaciones</option>
+                        <option value="Otros" ${carta.categoria === "Otros" ? "selected" : ""}>Otros</option>
+                    </select>
+                </div>
+                <div class="field-group" style="grid-column: span 2;">
+                    <label>Reverso (Significado/Definición)</label>
+                    <textarea class="edit-reverso" rows="2">${carta.reverso}</textarea>
+                </div>
+                
+                <div class="field-group">
+                    <label>Oración Ejemplo (Inglés)</label>
+                    <input type="text" class="edit-ejemplo" value="${carta.ejemplo_ingles}">
+                    
+                    <input type="hidden" class="edit-traduccion" value="${carta.ejemplo_espanol || ""}">
+                </div>
+                
+                <div class="field-group">
+                    <label>Término para Imagen (Pexels)</label>
+                    <input type="text" class="edit-imagen" value="${carta.termino_imagen}">
+                </div>
+            </div>
+        `;
+    listaRevision.appendChild(cardDiv);
+  });
+
+  modalRevision.style.display = "block";
+}
+
+// Botón Final: Confirmar e Inyectar
+btnConfirmarTodo.onclick = async () => {
+  const cardElements = document.querySelectorAll(".card-revision");
+  const cartasFinales = [];
+
+  cardElements.forEach((el) => {
+    cartasFinales.push({
+      frente: el.querySelector(".edit-frente").value,
+      reverso: el.querySelector(".edit-reverso").value,
+      ejemplo_ingles: el.querySelector(".edit-ejemplo").value,
+      ejemplo_espanol: el.querySelector(".edit-traduccion").value, // 👈 ¡Nueva línea!
+      termino_imagen: el.querySelector(".edit-imagen").value,
+      categoria: el.querySelector(".edit-categoria").value,
+    });
+  });
+
+  if (cartasFinales.length === 0) return alert("No hay cartas para enviar.");
+
+  btnConfirmarTodo.disabled = true;
+  btnConfirmarTodo.textContent = "🚀 Inyectando a Anki...";
+
+  try {
+    const res = await fetch("/inyectar_cartas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: currentChatId, cartas: cartasFinales }),
+    });
+    const data = await res.json();
+
+    alert(data.mensaje);
+    modalRevision.style.display = "none";
+  } catch (err) {
+    alert("Error al inyectar las cartas.");
+  } finally {
+    btnConfirmarTodo.disabled = false;
+    btnConfirmarTodo.textContent = "Confirmar e Inyectar a Anki";
+  }
+};
+
+// Cerrar modal
+btnCerrarModal.onclick = () => (modalRevision.style.display = "none");
+window.onclick = (e) => {
+  if (e.target == modalRevision) modalRevision.style.display = "none";
+};
 
 // 🚀 AL INICIAR: Cargar la lista de chats automáticamente
 cargarChats();
