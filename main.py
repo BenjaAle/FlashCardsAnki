@@ -188,7 +188,7 @@ def conversar(mensaje: Mensaje):
             (mensaje.chat_id,),
         )
         historial_bd = c.fetchall()
-        historial_bd.reverse() # Los invertimos para que queden en orden cronológico correcto (del más viejo al más nuevo)
+        historial_bd.reverse()  # Los invertimos para que queden en orden cronológico correcto (del más viejo al más nuevo)
 
         historial_gemini = []
         # Pasamos todos los mensajes menos el último (que es el que enviaremos ahora)
@@ -274,6 +274,10 @@ def proponer_cartas(req: ExtraerRequest):
     - Expresiones Nativas
     - Colocaciones
     - Otros
+    REGLA 4 (VERBOS E INTELIGENCIA DE CONJUGACIÓN): Si el término extraído es un VERBO, aplica esta lógica para los campos "ejemplo_ingles" y "ejemplo_espanol":
+    - Si el verbo es REGULAR: Crea EXACTAMENTE 2 oraciones cortas (una en presente y otra en pasado simple o presente perfecto).
+    - Si el verbo es IRREGULAR: Crea EXACTAMENTE 3 oraciones cortas (presente, pasado simple y presente perfecto usando el participio).
+    Separa las oraciones ÚNICAMENTE con un espacio después del punto. Ambas traducciones deben coincidir exactamente con el número de oraciones en inglés.
 
     Historial a procesar:
     {historial_texto}
