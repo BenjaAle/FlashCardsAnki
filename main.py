@@ -275,9 +275,11 @@ def proponer_cartas(req: ExtraerRequest):
     - Colocaciones
     - Otros
     REGLA 4 (VERBOS E INTELIGENCIA DE CONJUGACIÓN): Si el término extraído es un VERBO, aplica esta lógica para los campos "ejemplo_ingles" y "ejemplo_espanol":
-    - Si el verbo es REGULAR: Crea EXACTAMENTE 2 oraciones cortas (una en presente y otra en pasado simple o presente perfecto).
-    - Si el verbo es IRREGULAR: Crea EXACTAMENTE 3 oraciones cortas (presente, pasado simple y presente perfecto usando el participio).
-    Separa las oraciones ÚNICAMENTE con un espacio después del punto. Ambas traducciones deben coincidir exactamente con el número de oraciones en inglés.
+    - Si el verbo es REGULAR: Crea EXACTAMENTE 2 ejemplos (uno en presente, y otro en pasado simple o presente perfecto).
+    - Si el verbo es IRREGULAR: Crea EXACTAMENTE 3 ejemplos (presente, pasado simple y presente perfecto usando el participio).
+    ¡VITAL!: Debes separar cada ejemplo usando el símbolo " | ". 
+    Por ejemplo, "ejemplo_ingles": "I go to the park. | He went home! | We have gone far." y su respectivo "ejemplo_espanol": "Voy al parque. | ¡Él se fue a casa! | Hemos ido lejos."
+
 
     Historial a procesar:
     {historial_texto}
