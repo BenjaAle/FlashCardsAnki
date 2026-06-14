@@ -364,12 +364,6 @@ def inyectar_cartas(req: InyectarRequest):
             else:
                 texto_reverso_final = f"<b>{texto_reverso_base_html}</b>"
 
-            if texto_ejemplo_html:
-                if traduccion_ejemplo_html:
-                    texto_reverso_final += f"<br><br>{texto_ejemplo_html}<br><i>{traduccion_ejemplo_html}</i>"
-                else:
-                    texto_reverso_final += f"<br><br>{texto_ejemplo_html}"
-
             # 1. IMAGEN DE PEXELS
             if termino_imagen:
                 try:
@@ -400,7 +394,6 @@ def inyectar_cartas(req: InyectarRequest):
             # 2. AUDIO FRENTE
             nombre_archivo_frente = f"ia_audio_frente_{nombre_limpio}_{i}.mp3"
             try:
-                # Quitamos paréntesis y asteriscos para que la voz robótica suene limpia
                 texto_audio_frente = (
                     re.sub(r"\(.*?\)", "", texto_frente)
                     .replace("**", "")
@@ -421,29 +414,62 @@ def inyectar_cartas(req: InyectarRequest):
                 if os.path.exists(nombre_archivo_frente):
                     os.remove(nombre_archivo_frente)
 
-            # 3. AUDIO EJEMPLO
+            # 3. PROCESAMIENTO DE EJEMPLOS MÚLTIPLES (SEPARACIÓN SEGURA)
             if texto_ejemplo:
-                nombre_archivo_ejemplo = f"ia_audio_ejemplo_{nombre_limpio}_{i}.mp3"
-                try:
-                    # Limpiamos asteriscos para el audio
-                    texto_audio_ejemplo = (
-                        texto_ejemplo.replace("**", "").replace("*", "").strip()
+                # Separamos usando exclusivamente la barra vertical |
+                oraciones_en = [
+                    o.strip() for o in texto_ejemplo.split("|") if o.strip()
+                ]
+                oraciones_es = (
+                    [o.strip() for o in traduccion_ejemplo.split("|") if o.strip()]
+                    if traduccion_ejemplo
+                    else []
+                )
+
+                # Medida de seguridad: Si Gemini se equivocó en el número de barras
+                if traduccion_ejemplo and len(oraciones_en) != len(oraciones_es):
+                    oraciones_en = [texto_ejemplo.replace("|", "")]
+                    oraciones_es = [traduccion_ejemplo.replace("|", "")]
+
+                for j, oracion_en in enumerate(oraciones_en):
+                    oracion_en_html = md_a_html(oracion_en)
+                    oracion_es_html = (
+                        md_a_html(oraciones_es[j]) if j < len(oraciones_es) else ""
                     )
-                    gTTS(texto_audio_ejemplo, lang="en").save(nombre_archivo_ejemplo)
-                    with open(nombre_archivo_ejemplo, "rb") as f:
-                        invoke_anki(
-                            "storeMediaFile",
-                            filename=nombre_archivo_ejemplo,
-                            data=base64.b64encode(f.read()).decode("utf-8"),
+
+                    nombre_archivo_ejemplo = (
+                        f"ia_audio_ejemplo_{nombre_limpio}_{i}_{j}.mp3"
+                    )
+                    audio_tag = ""
+
+                    try:
+                        # Limpiamos asteriscos para el audio individual
+                        texto_audio_ejemplo = (
+                            oracion_en.replace("**", "").replace("*", "").strip()
                         )
-                    texto_reverso_final += (
-                        f"<br><br>🔊 <b>Listen:</b> [sound:{nombre_archivo_ejemplo}]"
-                    )
-                except:
-                    pass
-                finally:
-                    if os.path.exists(nombre_archivo_ejemplo):
-                        os.remove(nombre_archivo_ejemplo)
+                        gTTS(texto_audio_ejemplo, lang="en").save(
+                            nombre_archivo_ejemplo
+                        )
+                        with open(nombre_archivo_ejemplo, "rb") as f:
+                            invoke_anki(
+                                "storeMediaFile",
+                                filename=nombre_archivo_ejemplo,
+                                data=base64.b64encode(f.read()).decode("utf-8"),
+                            )
+                        audio_tag = (
+                            f"<br>🔊 <b>Listen:</b> [sound:{nombre_archivo_ejemplo}]"
+                        )
+                    except:
+                        pass
+                    finally:
+                        if os.path.exists(nombre_archivo_ejemplo):
+                            os.remove(nombre_archivo_ejemplo)
+
+                    # Ensamblamos esta oración específica con su propio audio y dobles saltos de línea
+                    if oracion_es_html:
+                        texto_reverso_final += f"<br><br>{oracion_en_html}<br><i>{oracion_es_html}</i>{audio_tag}"
+                    else:
+                        texto_reverso_final += f"<br><br>{oracion_en_html}{audio_tag}"
 
             # 4. INYECTAR A ANKI
             try:
@@ -462,14 +488,9 @@ def inyectar_cartas(req: InyectarRequest):
                 )
                 cartas_agregadas += 1
             except Exception as e:
+                # Plan B si la carta es duplicada (ejemplo al frente)
                 if texto_ejemplo and "duplicate" in str(e).lower():
                     frente_alternativo = texto_ejemplo_html
-                    if (
-                        os.path.exists(nombre_archivo_ejemplo)
-                        or "nombre_archivo_ejemplo" in locals()
-                    ):
-                        frente_alternativo += f" [sound:{nombre_archivo_ejemplo}]"
-
                     reverso_alternativo = f"🎯 <b>Contexto original:</b> {texto_frente_html}<br><br>{texto_reverso_final}"
                     try:
                         invoke_anki(
