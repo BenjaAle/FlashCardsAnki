@@ -14,7 +14,9 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 from google import genai  # Comunicacion con gemini
 from google.genai import types  # Memoria de chat
+from elevenlabs.client import ElevenLabs
 import edge_tts
+
 
 # ==========================================
 # ⚙️ CONFIGURACIÓN GENERAL
