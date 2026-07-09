@@ -39,9 +39,9 @@ client = genai.Client(api_key=api_key_gemini)
 VOCAL_TTS = "en-US-AvaNeural"
 
 
-def generar_audio(texto, nombre_archivo, voz=VOCAL_TTS):
+async def generar_audio(texto, nombre_archivo, voz=VOCAL_TTS):
     comunicacion = edge_tts.Communicate(texto, voz)
-    asyncio.run(comunicacion.save(nombre_archivo))
+    await comunicacion.save(nombre_archivo)
 
 
 # ==========================================
@@ -341,13 +341,53 @@ def proponer_cartas(req: ExtraerRequest):
         return {"error": f"Error al generar propuestas: {str(e)}"}
 
 
-# Toma las cartas propuestas y las inyecta a Anki, generando audios e imágenes
+# Toma las cartas propuestas y las inyecta a Anki, generando audios e imágenes en paralelo
 @app.post("/inyectar_cartas")
-def inyectar_cartas(req: InyectarRequest):
+async def inyectar_cartas(req: InyectarRequest):
     try:
         if not req.cartas:
             return {"mensaje": "🤷‍♂️ No se enviaron cartas para inyectar."}
 
+        # ------------------------------------------------------------------
+        # 🌟 FASE 1: RECOPILAR Y GENERAR TODOS LOS AUDIOS EN PARALELO (CONCURRENTE)
+        # ------------------------------------------------------------------
+        tareas_audio = []
+
+        for i, carta in enumerate(req.cartas):
+            texto_frente = str(carta.get("frente", "")).strip()
+            nombre_limpio = "".join(c if c.isalnum() else "_" for c in texto_frente[:15])
+
+            # 1. Preparar audio del Frente
+            texto_audio_frente = (
+                re.sub(r"\(.*?\)", "", texto_frente)
+                .replace("**", "")
+                .replace("*", "")
+                .strip()
+            )
+            nombre_archivo_frente = f"ia_audio_frente_{nombre_limpio}_{i}.mp3"
+            if texto_audio_frente:
+                # Agregamos la corrutina a la lista de tareas (sin ejecutarla aún)
+                tareas_audio.append(generar_audio(texto_audio_frente, nombre_archivo_frente))
+
+            # 2. Preparar audios de los Ejemplos Múltiples
+            texto_ejemplo = str(carta.get("ejemplo_ingles", "")).strip()
+            if texto_ejemplo:
+                oraciones_en = [o.strip() for o in texto_ejemplo.split("|") if o.strip()]
+                for j, oracion_en in enumerate(oraciones_en):
+                    texto_audio_ejemplo = oracion_en.replace("**", "").replace("*", "").strip()
+                    nombre_archivo_ejemplo = f"ia_audio_ejemplo_{nombre_limpio}_{i}_{j}.mp3"
+                    if texto_audio_ejemplo:
+                        # Agregamos la corrutina a la lista de tareas
+                        tareas_audio.append(generar_audio(texto_audio_ejemplo, nombre_archivo_ejemplo))
+
+        # Disparamos todas las descargas de audio simultáneamente a internet y esperamos que terminen
+        if tareas_audio:
+            await asyncio.gather(*tareas_audio)
+
+
+        # ------------------------------------------------------------------
+        # 🌟 FASE 2: INYECCIÓN SECUENCIAL A ANKI (Los archivos ya existen en disco)
+        # ------------------------------------------------------------------
         cartas_agregadas = 0
 
         for i, carta in enumerate(req.cartas):
@@ -358,14 +398,9 @@ def inyectar_cartas(req: InyectarRequest):
 
             categoria_elegida = str(carta.get("categoria", "Vocabulario")).strip()
             categorias_validas = [
-                "Vocabulario",
-                "Phrasal Verbs",
-                "Falsos Amigos",
-                "Verbos Irregulares",
-                "Gramatica y Teoria",
-                "Expresiones Nativas",
-                "Colocaciones",
-                "Otros",
+                "Vocabulario", "Phrasal Verbs", "Falsos Amigos", 
+                "Verbos Irregulares", "Gramatica y Teoria", 
+                "Expresiones Nativas", "Colocaciones", "Otros"
             ]
             if categoria_elegida not in categorias_validas:
                 categoria_elegida = "Otros"
@@ -377,11 +412,8 @@ def inyectar_cartas(req: InyectarRequest):
             except:
                 pass
 
-            nombre_limpio = "".join(
-                c if c.isalnum() else "_" for c in texto_frente[:15]
-            )
+            nombre_limpio = "".join(c if c.isalnum() else "_" for c in texto_frente[:15])
 
-            # 🌟 NUEVO: Función para traducir Markdown (**) a HTML (<b>) para Anki
             def md_a_html(texto):
                 texto = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", texto)
                 texto = re.sub(r"\*(.*?)\*", r"<i>\1</i>", texto)
@@ -393,13 +425,12 @@ def inyectar_cartas(req: InyectarRequest):
             traduccion_ejemplo = str(carta.get("ejemplo_espanol", "")).strip()
             traduccion_ejemplo_html = md_a_html(traduccion_ejemplo)
 
-            # Construimos el reverso final estandarizado con HTML real
             if "<br>" in texto_reverso_base_html:
                 texto_reverso_final = texto_reverso_base_html
             else:
                 texto_reverso_final = f"<b>{texto_reverso_base_html}</b>"
 
-            # 1. IMAGEN DE PEXELS
+            # 1. IMAGEN DE PEXELS (Se mantiene igual)
             if termino_imagen:
                 try:
                     url_busqueda = f"https://api.pexels.com/v1/search?query={termino_imagen}&per_page=1"
@@ -419,86 +450,58 @@ def inyectar_cartas(req: InyectarRequest):
                                 filename=nombre_archivo_img,
                                 data=base64.b64encode(img_data).decode("utf-8"),
                             )
-                            texto_reverso_final = (
-                                f"<img src='{nombre_archivo_img}'><br><br>"
-                                + texto_reverso_final
-                            )
+                            texto_reverso_final = f"<img src='{nombre_archivo_img}'><br><br>" + texto_reverso_final
                 except:
                     pass
 
-            # 2. AUDIO FRENTE
+            # 2. VINCULAR AUDIO FRENTE (El archivo ya fue creado en la Fase 1)
             nombre_archivo_frente = f"ia_audio_frente_{nombre_limpio}_{i}.mp3"
-            try:
-                texto_audio_frente = (
-                    re.sub(r"\(.*?\)", "", texto_frente)
-                    .replace("**", "")
-                    .replace("*", "")
-                    .strip()
-                )
-                generar_audio(texto_audio_frente, nombre_archivo_frente)
-                with open(nombre_archivo_frente, "rb") as f:
-                    invoke_anki(
-                        "storeMediaFile",
-                        filename=nombre_archivo_frente,
-                        data=base64.b64encode(f.read()).decode("utf-8"),
-                    )
-                texto_frente_html += f" [sound:{nombre_archivo_frente}]"
-            except:
-                pass
-            finally:
-                if os.path.exists(nombre_archivo_frente):
-                    os.remove(nombre_archivo_frente)
+            if os.path.exists(nombre_archivo_frente):
+                try:
+                    with open(nombre_archivo_frente, "rb") as f:
+                        invoke_anki(
+                            "storeMediaFile",
+                            filename=nombre_archivo_frente,
+                            data=base64.b64encode(f.read()).decode("utf-8"),
+                        )
+                    texto_frente_html += f" [sound:{nombre_archivo_frente}]"
+                except:
+                    pass
+                finally:
+                    if os.path.exists(nombre_archivo_frente):
+                        os.remove(nombre_archivo_frente)
 
-            # 3. PROCESAMIENTO DE EJEMPLOS MÚLTIPLES (SEPARACIÓN SEGURA)
+            # 3. VINCULAR AUDIOS DE EJEMPLOS MÚLTIPLES
             if texto_ejemplo:
-                # Separamos usando exclusivamente la barra vertical |
-                oraciones_en = [
-                    o.strip() for o in texto_ejemplo.split("|") if o.strip()
-                ]
-                oraciones_es = (
-                    [o.strip() for o in traduccion_ejemplo.split("|") if o.strip()]
-                    if traduccion_ejemplo
-                    else []
-                )
+                oraciones_en = [o.strip() for o in texto_ejemplo.split("|") if o.strip()]
+                oraciones_es = [o.strip() for o in traduccion_ejemplo.split("|") if o.strip()] if traduccion_ejemplo else []
 
-                # Medida de seguridad: Si Gemini se equivocó en el número de barras
                 if traduccion_ejemplo and len(oraciones_en) != len(oraciones_es):
                     oraciones_en = [texto_ejemplo.replace("|", "")]
                     oraciones_es = [traduccion_ejemplo.replace("|", "")]
 
                 for j, oracion_en in enumerate(oraciones_en):
                     oracion_en_html = md_a_html(oracion_en)
-                    oracion_es_html = (
-                        md_a_html(oraciones_es[j]) if j < len(oraciones_es) else ""
-                    )
-
-                    nombre_archivo_ejemplo = (
-                        f"ia_audio_ejemplo_{nombre_limpio}_{i}_{j}.mp3"
-                    )
+                    oracion_es_html = md_a_html(oraciones_es[j]) if j < len(oraciones_es) else ""
+                    nombre_archivo_ejemplo = f"ia_audio_ejemplo_{nombre_limpio}_{i}_{j}.mp3"
                     audio_tag = ""
 
-                    try:
-                        # Limpiamos asteriscos para el audio individual
-                        texto_audio_ejemplo = (
-                            oracion_en.replace("**", "").replace("*", "").strip()
-                        )
-                        generar_audio(texto_audio_ejemplo, nombre_archivo_ejemplo)
-                        with open(nombre_archivo_ejemplo, "rb") as f:
-                            invoke_anki(
-                                "storeMediaFile",
-                                filename=nombre_archivo_ejemplo,
-                                data=base64.b64encode(f.read()).decode("utf-8"),
-                            )
-                        audio_tag = (
-                            f"<br>🔊 <b>Listen:</b> [sound:{nombre_archivo_ejemplo}]"
-                        )
-                    except:
-                        pass
-                    finally:
-                        if os.path.exists(nombre_archivo_ejemplo):
-                            os.remove(nombre_archivo_ejemplo)
+                    # Vincular si el archivo fue creado con éxito en la Fase 1
+                    if os.path.exists(nombre_archivo_ejemplo):
+                        try:
+                            with open(nombre_archivo_ejemplo, "rb") as f:
+                                invoke_anki(
+                                    "storeMediaFile",
+                                    filename=nombre_archivo_ejemplo,
+                                    data=base64.b64encode(f.read()).decode("utf-8"),
+                                )
+                            audio_tag = f"<br>🔊 <b>Listen:</b> [sound:{nombre_archivo_ejemplo}]"
+                        except:
+                            pass
+                        finally:
+                            if os.path.exists(nombre_archivo_ejemplo):
+                                os.remove(nombre_archivo_ejemplo)
 
-                    # Ensamblamos esta oración específica con su propio audio y dobles saltos de línea
                     if oracion_es_html:
                         texto_reverso_final += f"<br><br>{oracion_en_html}<br><i>{oracion_es_html}</i>{audio_tag}"
                     else:
@@ -521,7 +524,6 @@ def inyectar_cartas(req: InyectarRequest):
                 )
                 cartas_agregadas += 1
             except Exception as e:
-                # Plan B si la carta es duplicada (ejemplo al frente)
                 if texto_ejemplo and "duplicate" in str(e).lower():
                     frente_alternativo = texto_ejemplo_html
                     reverso_alternativo = f"🎯 <b>Contexto original:</b> {texto_frente_html}<br><br>{texto_reverso_final}"
@@ -543,19 +545,14 @@ def inyectar_cartas(req: InyectarRequest):
                     except:
                         pass
 
-        # Marcar los mensajes como extraídos
+        # Marcar mensajes como extraídos
         conn = sqlite3.connect("tutor.db")
         c = conn.cursor()
-        c.execute(
-            "UPDATE mensajes SET extraido = 1 WHERE chat_id = ? AND extraido = 0",
-            (req.chat_id,),
-        )
+        c.execute("UPDATE mensajes SET extraido = 1 WHERE chat_id = ? AND extraido = 0", (req.chat_id,))
         conn.commit()
         conn.close()
 
-        return {
-            "mensaje": f"🎉 ¡Éxito! Se inyectaron {cartas_agregadas} cartas revisadas y personalizadas por ti."
-        }
+        return {"mensaje": f"🎉 ¡Éxito! Se inyectaron {cartas_agregadas} cartas revisadas en tiempo récord gracias a la concurrencia."}
 
     except Exception as e:
         return {"mensaje": f"⚠️ Error en el procesamiento final: {str(e)}"}
