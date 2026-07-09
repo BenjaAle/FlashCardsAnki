@@ -20,6 +20,8 @@ logs/
 *.db
 *.sqlite3
 
+tutor.db
+
 # Ignorar archivos .mp3
 *.mp3
 

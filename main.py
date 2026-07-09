@@ -1,3 +1,4 @@
+import asyncio
 import os
 import json
 import urllib.request  # Web: Para comunicarnos con AnkiConnect
@@ -13,7 +14,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 from google import genai  # Comunicacion con gemini
 from google.genai import types  # Memoria de chat
-from gtts import gTTS
+import edge_tts
 
 # ==========================================
 # ⚙️ CONFIGURACIÓN GENERAL
@@ -33,6 +34,14 @@ if not api_key_gemini or not api_key_pexels:
     )
 
 client = genai.Client(api_key=api_key_gemini)
+
+
+VOCAL_TTS = "en-US-AvaNeural"
+
+
+def generar_audio(texto, nombre_archivo, voz=VOCAL_TTS):
+    comunicacion = edge_tts.Communicate(texto, voz)
+    asyncio.run(comunicacion.save(nombre_archivo))
 
 
 # ==========================================
@@ -426,7 +435,7 @@ def inyectar_cartas(req: InyectarRequest):
                     .replace("*", "")
                     .strip()
                 )
-                gTTS(texto_audio_frente, lang="en").save(nombre_archivo_frente)
+                generar_audio(texto_audio_frente, nombre_archivo_frente)
                 with open(nombre_archivo_frente, "rb") as f:
                     invoke_anki(
                         "storeMediaFile",
@@ -473,9 +482,7 @@ def inyectar_cartas(req: InyectarRequest):
                         texto_audio_ejemplo = (
                             oracion_en.replace("**", "").replace("*", "").strip()
                         )
-                        gTTS(texto_audio_ejemplo, lang="en").save(
-                            nombre_archivo_ejemplo
-                        )
+                        generar_audio(texto_audio_ejemplo, nombre_archivo_ejemplo)
                         with open(nombre_archivo_ejemplo, "rb") as f:
                             invoke_anki(
                                 "storeMediaFile",
