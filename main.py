@@ -1,18 +1,18 @@
 import os
 import json
-import urllib.request
-import base64
+import urllib.request  # Web: Para comunicarnos con AnkiConnect
+import base64  # Codificar imagenes y audios para Anki
 import re
-import requests
-import sqlite3  # 👈 ¡Nueva importación para la Base de Datos!
+import requests  # Para consumir la API de Pexels
+import sqlite3
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
+from fastapi.staticfiles import StaticFiles  # Para que la web lea estaticos js y css
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types  # 👈 Para estructurar el historial
+from google import genai  # Comunicacion con gemini
+from google.genai import types  # Memoria de chat
 from gtts import gTTS
 
 # ==========================================
@@ -39,13 +39,18 @@ client = genai.Client(api_key=api_key_gemini)
 # 🗄️ INICIALIZACIÓN DE LA BASE DE DATOS
 # ==========================================
 def iniciar_bd():
+    # Abrir archivo de la BDD (o crearlo)
     conn = sqlite3.connect("tutor.db")
+
+    # Crear cursor para ejecutar comandos SQL
     c = conn.cursor()
+
     # Tabla para guardar las sesiones de chat (barra lateral)
     c.execute(
         """CREATE TABLE IF NOT EXISTS chats (id INTEGER PRIMARY KEY AUTOINCREMENT, titulo TEXT)"""
     )
     # Tabla para guardar los mensajes de cada chat (extraidos para memoria y extracción a Anki)
+    # rol: yo o IA.
     c.execute(
         """CREATE TABLE IF NOT EXISTS mensajes (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER, rol TEXT, texto TEXT, extraido INTEGER DEFAULT 0)"""
     )
@@ -53,20 +58,23 @@ def iniciar_bd():
     conn.close()
 
 
-iniciar_bd()  # Creamos el archivo tutor.db si no existe
+iniciar_bd()
 
 # ==========================================
 # 🚀 CONFIGURACIÓN DE FASTAPI
 # ==========================================
 app = FastAPI(title="Tutor de Inglés con IA")
+
+# Permiso para ver la carpeta static
 app.mount("/static", StaticFiles(directory="static"), name="static")
+# Permiso para ver la carpeta templates
 templates = Jinja2Templates(directory="templates")
 
 
 # Estructuras de datos que recibiremos del navegador
 class Mensaje(BaseModel):
     texto: str
-    chat_id: int  # 👈 Ahora necesitamos saber en qué chat estamos hablando
+    chat_id: int  # Para saber a qué chat pertenece el mensaje
 
 
 class NuevoChat(BaseModel):
@@ -82,11 +90,24 @@ class RenombrarRequest(BaseModel):
     titulo: str
 
 
+# Extraer cartas a Anki leyendo directamente de la Base de Datos
+# Se define la nueva estructura de datos que enviará el navegador para la inyección final
+class InyectarRequest(BaseModel):
+    chat_id: int
+    cartas: list
+
+
 # ==========================================
 # 🔌 FUNCIONES DE ANKI
 # ==========================================
+
+
+# Función para crear la estructura de la petición a AnkiConnect
 def request_anki(action, **params):
     return {"action": action, "version": 6, "params": params}
+
+
+# Función para invocar AnkiConnect
 
 
 def invoke_anki(action, **params):
@@ -114,7 +135,11 @@ def pagina_principal(request: Request):
 def crear_chat(datos: NuevoChat):
     conn = sqlite3.connect("tutor.db")
     c = conn.cursor()
+
+    # Consulta parametrizada para evitar inyecciones SQL
     c.execute("INSERT INTO chats (titulo) VALUES (?)", (datos.titulo,))
+
+    # Obtener el ID del chat recién creado
     chat_id = c.lastrowid
     conn.commit()
     conn.close()
@@ -132,18 +157,20 @@ def obtener_chats():
     return chats
 
 
-# 🌟 NUEVA RUTA: Renombrar un chat
+# 3. Renombrar un chat existente
 @app.put("/chats/{chat_id}")
 def renombrar_chat(chat_id: int, req: RenombrarRequest):
     conn = sqlite3.connect("tutor.db")
     c = conn.cursor()
+
+    # (req.titulo, chat_id) va dentro
     c.execute("UPDATE chats SET titulo = ? WHERE id = ?", (req.titulo, chat_id))
     conn.commit()
     conn.close()
     return {"mensaje": "Renombrado exitosamente"}
 
 
-# 🌟 NUEVA RUTA: Eliminar un chat (y sus mensajes)
+# 4. Eliminar un chat y sus mensajes.
 @app.delete("/chats/{chat_id}")
 def eliminar_chat(chat_id: int):
     conn = sqlite3.connect("tutor.db")
@@ -155,7 +182,7 @@ def eliminar_chat(chat_id: int):
     return {"mensaje": "Eliminado exitosamente"}
 
 
-# 3. Obtener los mensajes antiguos de un chat específico
+# 5. Obtener los mensajes antiguos de un chat específico
 @app.get("/chats/{chat_id}/mensajes")
 def obtener_mensajes(chat_id: int):
     conn = sqlite3.connect("tutor.db")
@@ -168,7 +195,7 @@ def obtener_mensajes(chat_id: int):
     return mensajes
 
 
-# 4. El motor de conversación con memoria real
+# 6. El motor de conversación con memoria real
 @app.post("/chat")
 def conversar(mensaje: Mensaje):
     try:
@@ -223,14 +250,7 @@ def conversar(mensaje: Mensaje):
         return {"respuesta": f"Error: {str(e)}"}
 
 
-# 5. Extraer cartas a Anki leyendo directamente de la Base de Datos
-# Definimos la nueva estructura de datos que enviará el navegador para la inyección final
-class InyectarRequest(BaseModel):
-    chat_id: int
-    cartas: list
-
-
-# 🌟 NUEVA RUTA 1: Analiza el chat y propone las cartas en JSON puro
+# 7. Generar propuestas de cartas
 @app.post("/proponer_cartas")
 def proponer_cartas(req: ExtraerRequest):
     conn = sqlite3.connect("tutor.db")
@@ -252,7 +272,7 @@ def proponer_cartas(req: ExtraerRequest):
 
     prompt = f"""
     Eres un creador de flashcards experto. Analiza el siguiente historial de conversación entre un alumno y su tutor de inglés.
-    REGLA 1: Extrae ÚNICAMENTE el vocabulario útil, phrasal verbs, o correcciones clave. Si no hay nada útil, devuelve []
+    REGLA 1: Extrae ÚNICAMENTE el vocabulario útil, phrasal verbs, frases completas o correcciones clave. Si no hay nada útil, devuelve []
     REGLA 2: Devuelve ESTRICTAMENTE un arreglo JSON puro sin formato markdown ni bloques ```json.
     Formato esperado:
     [
@@ -261,7 +281,7 @@ def proponer_cartas(req: ExtraerRequest):
         "reverso": "Definición básica en español",
         "ejemplo_ingles": "Oración de ejemplo en inglés.",
         "ejemplo_espanol": "Traducción natural de la oración de ejemplo al español.",
-        "termino_imagen": "Palabra clave visual en inglés o vacío.",
+        "termino_imagen": "Palabra clave visual en inglés",
         "categoria": "ELIGE_UNA_CATEGORIA"
       }}
     ]
@@ -279,7 +299,13 @@ def proponer_cartas(req: ExtraerRequest):
     - Si el verbo es IRREGULAR: Crea EXACTAMENTE 3 ejemplos (presente, pasado simple y presente perfecto usando el participio).
     ¡VITAL!: Debes separar cada ejemplo usando el símbolo " | ". 
     Por ejemplo, "ejemplo_ingles": "I go to the park. | He went home! | We have gone far." y su respectivo "ejemplo_espanol": "Voy al parque. | ¡Él se fue a casa! | Hemos ido lejos."
-
+    REGLA 5 (PHRASAL VERBS MÚLTIPLES SIGNIFICADOS): Si el término extraído pertenece a la categoría "Phrasal Verbs":
+    1. En el campo "frente", añade entre paréntesis su tipo gramatical exacto: "(Sin objeto)", "(Separable)" o "(Inseparable)". Ejemplo: "Work out (Sin objeto)" o "Turn on (Separable)".
+    2. En el campo "reverso", enumera sus significados más comunes (ej: "1. Hacer ejercicio. <br> 2. Resolver / Calcular.").
+    3. En los campos "ejemplo_ingles" y "ejemplo_espanol", crea un ejemplo por CADA UNO de los significados.
+    4. ¡VITAL!: Separa los ejemplos usando estrictamente el símbolo " | " (igual que en la Regla 4).
+    REGLA 6 (UN EJEMPLO POR CADA SIGNIFICADO): Si el término extraído tiene múltiples significados, crea un ejemplo en inglés y su traducción al español para cada significado. Separa los ejemplos usando estrictamente el símbolo " | ".
+    REGLA 7 (IMÁGENES SIEMPRE): El campo "termino_imagen" NUNCA debe estar vacío. Si el concepto es muy abstracto (ej. preposiciones, tiempos verbales), asigna un término visual simple en inglés (ej: "talking", "idea", "study", "person"). Usa siempre palabras en inglés.
 
     Historial a procesar:
     {historial_texto}
@@ -306,7 +332,7 @@ def proponer_cartas(req: ExtraerRequest):
         return {"error": f"Error al generar propuestas: {str(e)}"}
 
 
-# 🌟 NUEVA RUTA 2: Toma las cartas editadas, genera medios e inyecta a Anki
+# Toma las cartas propuestas y las inyecta a Anki, generando audios e imágenes
 @app.post("/inyectar_cartas")
 def inyectar_cartas(req: InyectarRequest):
     try:
