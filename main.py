@@ -14,7 +14,6 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 from google import genai  # Comunicacion con gemini
 from google.genai import types  # Memoria de chat
-from elevenlabs.client import ElevenLabs
 import edge_tts
 
 
@@ -343,7 +342,7 @@ def proponer_cartas(req: ExtraerRequest):
         return {"error": f"Error al generar propuestas: {str(e)}"}
 
 
-# Toma las cartas propuestas y las inyecta a Anki, generando audios e imágenes en paralelo
+# 8. Toma las cartas propuestas y las inyecta a Anki, generando audios e imágenes en paralelo
 @app.post("/inyectar_cartas")
 async def inyectar_cartas(req: InyectarRequest):
     try:
