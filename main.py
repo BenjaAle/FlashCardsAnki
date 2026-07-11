@@ -125,6 +125,10 @@ class NuevaHistoria(BaseModel):
     tematica: str
     nivel: str = "Intermedio" # B1/B2 por defecto.
 
+class CartaUnicaRequest(BaseModel):
+    palabra: str
+    contexto: str
+
 # ==========================================
 # 🔌 FUNCIONES DE ANKI
 # ==========================================
@@ -688,5 +692,45 @@ def obtener_lista_historias():
     historias = [{"id": row[0], "titulo": row[1]} for row in c.fetchall()]
     conn.close()
     return historias
+
+@app.post("/proponer_carta_unica")
+def proponer_carta_unica(req: CartaUnicaRequest):
+    prompt = f"""
+    Eres un creador de flashcards experto. El alumno no conoce el término "{req.palabra}" que leyó en la siguiente oración: "{req.contexto}".
+    Crea UNA SOLA flashcard perfecta para este término, explicando su significado dentro de ese contexto específico.
+    
+    REGLA 1: Devuelve ESTRICTAMENTE un arreglo JSON puro de un solo elemento, sin formato markdown ni bloques ```json.
+    Formato esperado:
+    [
+      {{
+        "frente": "Palabra o concepto",
+        "reverso": "Definición básica en español",
+        "ejemplo_ingles": "Oración de ejemplo en inglés.",
+        "ejemplo_espanol": "Traducción natural de la oración.",
+        "termino_imagen": "Palabra clave visual en inglés",
+        "categoria": "ELIGE_UNA_CATEGORIA"
+      }}
+    ]
+    REGLA 2: El campo "categoria" DEBE ser ESTRICTAMENTE una de las siguientes: Vocabulario, Phrasal Verbs, Falsos Amigos, Verbos Irregulares, Gramatica y Teoria, Expresiones Nativas, Colocaciones, Otros.
+    REGLA 3 (VERBOS): Si es un verbo, crea ejemplos según su tipo (2 si es regular, 3 si es irregular). Separa cada ejemplo usando " | ".
+    REGLA 4 (PHRASAL VERBS): Si es phrasal verb, añade su tipo entre paréntesis en el frente, enumera significados en el reverso, y da un ejemplo por cada significado, separados por " | ".
+    REGLA 5 (IMÁGENES): "termino_imagen" NUNCA debe estar vacío. Usa palabras abstractas en inglés si es necesario.
+    """
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash", contents=prompt
+        )
+        respuesta_limpia = response.text.replace("```json", "").replace("```", "").strip()
+        
+        datos_brutos = json.loads(respuesta_limpia)
+        if isinstance(datos_brutos, dict):
+            lista_cartas = next((v for v in datos_brutos.values() if isinstance(v, list)), [])
+        else:
+            lista_cartas = datos_brutos if isinstance(datos_brutos, list) else []
+
+        return {"cartas": lista_cartas}
+    except Exception as e:
+        return {"error": f"Error al generar propuesta: {str(e)}"}
 
 # uvicorn main:app --reload

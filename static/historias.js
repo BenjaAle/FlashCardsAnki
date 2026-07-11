@@ -6,6 +6,12 @@ const historiaTitulo = document.getElementById("historia-titulo");
 const modeBtns = document.querySelectorAll(".mode-btn");
 const listaHistoriasContainer = document.getElementById("lista-historias");
 
+// Capturamos los elementos del modal (ya existen en el HTML)
+const modalRevision = document.getElementById("modal-revision");
+const listaRevision = document.getElementById("lista-revision");
+const btnConfirmarTodo = document.getElementById("btn-confirmar-todo");
+const btnCerrarModal = document.getElementById("btn-cerrar-modal");
+
 let lineasActuales = [];
 let audioObjects = [];
 let reproduciendo = false;
@@ -70,13 +76,15 @@ const audioPlayer = document.getElementById("audio-player");
 
 // 3. Cargar la historia en el HTML
 async function cargarHistoria(historia_id) {
-    // 🛠️ FIX AL BUG: Detener cualquier audio sonando antes de cargar lo nuevo
     audioPlayer.pause();
     audioPlayer.src = "";
-    audioPlayer.style.display = "none";
-    reproduciendo = false;
+    audioPlayer.style.display = "none"; // Ocultamos el reproductor nativo
+    
+    // Mostramos el botón de inicio al cargar una historia nueva
+    btnPlayAll.style.display = "block"; 
     btnPlayAll.textContent = "▶ Reproducir Historia";
-    btnPlayAll.style.background = "#27ae60";
+    
+    indiceAudioActual = -1; // Reseteamos el índice
 
     const res = await fetch(`/api/historias/${historia_id}`);
     const data = await res.json();
@@ -88,10 +96,25 @@ async function cargarHistoria(historia_id) {
         const div = document.createElement("div");
         div.className = "story-line";
         div.id = `linea-${index}`;
-        
-        // ✨ NUEVA FUNCIÓN: Haz clic en cualquier oración para reproducirla desde ahí
         div.style.cursor = "pointer";
-        div.onclick = () => reproducirDesde(index);
+        
+        // ✨ FIX 2 y FIX 3: Lógica inteligente al hacer clic en la fila
+        div.onclick = () => {
+            // FIX 3: Si el usuario seleccionó texto, cancelamos el clic para no interrumpir
+            if (window.getSelection().toString().trim().length > 0) return;
+
+            // FIX 2: Si hacemos clic en la fila que YA está sonando, pausamos o reanudamos
+            if (indiceAudioActual === index) {
+                if (audioPlayer.paused) {
+                    audioPlayer.play();
+                } else {
+                    audioPlayer.pause();
+                }
+            } else {
+                // Si es una fila diferente, la reproducimos desde cero
+                reproducirDesde(index);
+            }
+        };
         
         div.innerHTML = `
             <div class="text-en">${linea.en}</div>
@@ -104,20 +127,19 @@ async function cargarHistoria(historia_id) {
 // 4. Lógica del Reproductor Único y Visible
 function reproducirDesde(index) {
     if (index >= lineasActuales.length) {
-        // Terminó la historia
-        reproduciendo = false;
+        // Terminó la historia: Volvemos a mostrar el botón inicial
+        btnPlayAll.style.display = "block";
         btnPlayAll.textContent = "▶ Reproducir Historia";
-        btnPlayAll.style.background = "#27ae60";
+        audioPlayer.style.display = "none"; // Ocultamos el reproductor nativo
         document.querySelectorAll(".story-line").forEach(el => el.classList.remove("playing"));
+        indiceAudioActual = -1;
         return;
     }
 
-    reproduciendo = true;
     indiceAudioActual = index;
     
-    // Cambiamos el texto del botón
-    btnPlayAll.textContent = "⏸ Pausar";
-    btnPlayAll.style.background = "#e74c3c";
+    // ✨ FIX 1: Ocultamos el botón verde porque el reproductor nativo toma el control
+    btnPlayAll.style.display = "none";
 
     // Cargamos el archivo en el reproductor visible y lo hacemos aparecer
     audioPlayer.style.display = "block";
@@ -132,33 +154,15 @@ function reproducirDesde(index) {
     document.getElementById(`linea-${index}`).scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
-// Escuchamos el evento nativo del reproductor: cuando termina un audio, pasa al siguiente
+// Escuchamos el evento nativo del reproductor
 audioPlayer.onended = () => {
     reproducirDesde(indiceAudioActual + 1);
 };
 
-// Control maestro desde el botón verde/rojo
+// Control maestro inicial (Solo sirve para arrancar desde cero)
 btnPlayAll.addEventListener("click", () => {
     if (lineasActuales.length === 0) return;
-
-    if (reproduciendo) {
-        // Si estaba sonando, lo pausamos nativamente
-        audioPlayer.pause();
-        reproduciendo = false;
-        btnPlayAll.textContent = "▶ Reanudar";
-        btnPlayAll.style.background = "#f39c12"; // Color naranja para indicar pausa
-    } else {
-        // Si hay un audio cargado (pausado), lo reanudamos desde donde quedó
-        if (audioPlayer.src && audioPlayer.src !== window.location.href) {
-            audioPlayer.play();
-            reproduciendo = true;
-            btnPlayAll.textContent = "⏸ Pausar";
-            btnPlayAll.style.background = "#e74c3c";
-        } else {
-            // Si está desde cero, empezamos por la línea 0
-            reproducirDesde(0);
-        }
-    }
+    reproducirDesde(0);
 });
 
 // 5. Cargar la lista de historias en la barra lateral
@@ -189,3 +193,174 @@ async function cargarListaHistorias() {
 
 // 🚀 AL INICIAR: Cargar la lista automáticamente
 cargarListaHistorias();
+
+// ==========================================
+// 🪄 LÓGICA DE SELECCIÓN "ESTILO KINDLE"
+// ==========================================
+const floatingBtn = document.getElementById("floating-anki-btn");
+let seleccionActual = { palabra: "", contexto: "" };
+
+// 1. Detectar cuando el usuario suelta el clic (termina de seleccionar)
+document.addEventListener("mouseup", (e) => {
+    // Si hicimos clic en el propio botón flotante, no hacemos nada aquí
+    if (e.target.id === "floating-anki-btn") return;
+
+    const selection = window.getSelection();
+    const textoSeleccionado = selection.toString().trim();
+
+    // Verificamos si hay texto seleccionado y si estamos dentro de una línea de la historia
+    const lineaCercana = e.target.closest('.story-line');
+
+    if (textoSeleccionado.length > 0 && lineaCercana) {
+        // Capturamos el texto y la oración completa (para dársela a Gemini como contexto)
+        seleccionActual.palabra = textoSeleccionado;
+        seleccionActual.contexto = lineaCercana.querySelector('.text-en').textContent;
+
+        // Calculamos dónde dibujar el botón flotante (justo arriba al centro de la selección)
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        
+        // window.scrollY y window.scrollX corrigen la posición si la página está scrolleada
+        floatingBtn.style.top = `${rect.top + window.scrollY - 35}px`;
+        floatingBtn.style.left = `${rect.left + window.scrollX + (rect.width / 2) - 40}px`;
+        floatingBtn.style.display = "block";
+    } else {
+        // Si hizo clic en el vacío, ocultamos el botón
+        floatingBtn.style.display = "none";
+    }
+});
+
+// Ocultar el botón si la página hace scroll o se cambia el tamaño
+window.addEventListener("scroll", () => { floatingBtn.style.display = "none"; });
+window.addEventListener("resize", () => { floatingBtn.style.display = "none"; });
+
+// 2. Acción al hacer clic en el botón flotante
+// 2. Acción al hacer clic en el botón flotante
+floatingBtn.addEventListener("click", async () => {
+    floatingBtn.style.display = "none";
+    
+    // Cambiamos el cursor para mostrar que está cargando
+    document.body.style.cursor = "wait";
+
+    try {
+        const res = await fetch("/proponer_carta_unica", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+                palabra: seleccionActual.palabra, 
+                contexto: seleccionActual.contexto 
+            })
+        });
+        const data = await res.json();
+
+        if (data.error) {
+            alert(data.error);
+        } else if (data.cartas.length === 0) {
+            alert("No se pudo generar la carta.");
+        } else {
+            abrirModalRevision(data.cartas);
+        }
+    } catch (err) {
+        alert("Error al conectar con el servidor.");
+    } finally {
+        document.body.style.cursor = "default";
+        window.getSelection().removeAllRanges(); // Limpiamos la selección
+    }
+});
+
+// 3. Dibujar las cartas en el modal (Idéntico a script.js)
+function abrirModalRevision(cartas) {
+    listaRevision.innerHTML = ""; 
+
+    cartas.forEach((carta, index) => {
+        const cardDiv = document.createElement("div");
+        cardDiv.className = "card-revision";
+        cardDiv.dataset.index = index;
+
+        cardDiv.innerHTML = `
+            <span class="delete-card" onclick="this.parentElement.remove()">✕ Eliminar</span>
+            <div class="grid-edit">
+                <div class="field-group">
+                    <label>Frente (Concepto)</label>
+                    <input type="text" class="edit-frente" value="${carta.frente}">
+                </div>
+                <div class="field-group">
+                    <label>Categoría</label>
+                    <select class="edit-categoria">
+                        <option value="Vocabulario" ${carta.categoria === "Vocabulario" ? "selected" : ""}>Vocabulario</option>
+                        <option value="Phrasal Verbs" ${carta.categoria === "Phrasal Verbs" ? "selected" : ""}>Phrasal Verbs</option>
+                        <option value="Falsos Amigos" ${carta.categoria === "Falsos Amigos" ? "selected" : ""}>Falsos Amigos</option>
+                        <option value="Verbos Irregulares" ${carta.categoria === "Verbos Irregulares" ? "selected" : ""}>Verbos Irregulares</option>
+                        <option value="Gramatica y Teoria" ${carta.categoria === "Gramatica y Teoria" ? "selected" : ""}>Gramatica y Teoria</option>
+                        <option value="Expresiones Nativas" ${carta.categoria === "Expresiones Nativas" ? "selected" : ""}>Expresiones Nativas</option>
+                        <option value="Colocaciones" ${carta.categoria === "Colocaciones" ? "selected" : ""}>Colocaciones</option>
+                        <option value="Otros" ${carta.categoria === "Otros" ? "selected" : ""}>Otros</option>
+                    </select>
+                </div>
+                <div class="field-group" style="grid-column: span 2;">
+                    <label>Reverso (Significado/Definición)</label>
+                    <textarea class="edit-reverso" rows="2">${carta.reverso}</textarea>
+                </div>
+                <div class="field-group">
+                    <label>Oración Ejemplo (Inglés)</label>
+                    <input type="text" class="edit-ejemplo" value="${carta.ejemplo_ingles}">
+                    <input type="hidden" class="edit-traduccion" value="${carta.ejemplo_espanol || ""}">
+                </div>
+                <div class="field-group">
+                    <label>Término para Imagen (Pexels)</label>
+                    <input type="text" class="edit-imagen" value="${carta.termino_imagen}">
+                </div>
+            </div>
+        `;
+        listaRevision.appendChild(cardDiv);
+    });
+
+    modalRevision.style.display = "block";
+}
+
+// 4. Confirmar e Inyectar a Anki
+btnConfirmarTodo.onclick = async () => {
+    const cardElements = document.querySelectorAll(".card-revision");
+    const cartasFinales = [];
+
+    cardElements.forEach((el) => {
+        cartasFinales.push({
+            frente: el.querySelector(".edit-frente").value,
+            reverso: el.querySelector(".edit-reverso").value,
+            ejemplo_ingles: el.querySelector(".edit-ejemplo").value,
+            ejemplo_espanol: el.querySelector(".edit-traduccion").value,
+            termino_imagen: el.querySelector(".edit-imagen").value,
+            categoria: el.querySelector(".edit-categoria").value,
+        });
+    });
+
+    if (cartasFinales.length === 0) return alert("No hay cartas para enviar.");
+
+    btnConfirmarTodo.disabled = true;
+    btnConfirmarTodo.textContent = "🚀 Inyectando a Anki...";
+
+    try {
+        // Usamos tu mismo endpoint maestro de inyección.
+        // Le pasamos chat_id: 0 porque esta carta viene de una historia, no de un chat.
+        const res = await fetch("/inyectar_cartas", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chat_id: 0, cartas: cartasFinales }),
+        });
+        const data = await res.json();
+
+        alert(data.mensaje);
+        modalRevision.style.display = "none";
+    } catch (err) {
+        alert("Error al inyectar las cartas.");
+    } finally {
+        btnConfirmarTodo.disabled = false;
+        btnConfirmarTodo.textContent = "Confirmar e Inyectar a Anki";
+    }
+};
+
+// Cerrar modal
+btnCerrarModal.onclick = () => (modalRevision.style.display = "none");
+window.onclick = (e) => {
+    if (e.target == modalRevision) modalRevision.style.display = "none";
+};

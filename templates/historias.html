@@ -44,55 +44,195 @@
         border-left: 5px solid #27ae60;
         background: #f0fdf4;
       }
-      .text-en { font-size: 18px; font-weight: bold; color: #1e293b; margin-bottom: 5px; }
-      .text-es { font-size: 15px; color: #64748b; font-style: italic; }
-      
+      .text-en {
+        font-size: 18px;
+        font-weight: bold;
+        color: #1e293b;
+        margin-bottom: 5px;
+      }
+      .text-es {
+        font-size: 15px;
+        color: #64748b;
+        font-style: italic;
+      }
+
       /* Clases mágicas para ocultar según el modo */
-      .hide-es .text-es { display: none; }
-      .hide-en .text-en { display: none; }
-      .hide-en.hide-es .story-line { min-height: 40px; display: flex; align-items: center; justify-content: center;}
-      .hide-en.hide-es .story-line::after { content: "🎧 Escuchando audio..."; color: #94a3b8; font-style: italic;}
+      .hide-es .text-es {
+        display: none;
+      }
+      .hide-en .text-en {
+        display: none;
+      }
+      .hide-en.hide-es .story-line {
+        min-height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .hide-en.hide-es .story-line::after {
+        content: "🎧 Escuchando audio...";
+        color: #94a3b8;
+        font-style: italic;
+      }
     </style>
   </head>
   <body>
     <div class="app-container">
       <div class="sidebar">
-        <a href="/" style="text-decoration: none;">
-            <button class="new-chat-btn" style="width: 100%; background: #475569;">⬅ Volver al Chat</button>
+        <a href="/" style="text-decoration: none">
+          <button class="new-chat-btn" style="width: 100%; background: #475569">
+            ⬅ Volver al Chat
+          </button>
         </a>
-        <h3 style="margin-top: 20px; border-bottom: 1px solid #334155; padding-bottom: 10px;">Generar Historia</h3>
-        
-        <div style="display: flex; flex-direction: column; gap: 10px;">
-            <label style="font-size: 12px; color: #cbd5e1;">Temática:</label>
-            <textarea id="tema-input" rows="3" placeholder="Ej: Mis mascotas Negro y Teo haciendo travesuras en casa..." style="padding: 8px; border-radius: 5px; border: none; resize: none; font-family: inherit;"></textarea>
-            
-            <button id="btn-generar" class="new-chat-btn" style="margin-bottom: 0;">✨ Generar y Crear Audios</button>
+        <h3
+          style="
+            margin-top: 20px;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 10px;
+          "
+        >
+          Generar Historia
+        </h3>
+
+        <div style="display: flex; flex-direction: column; gap: 10px">
+          <label style="font-size: 12px; color: #cbd5e1">Temática:</label>
+          <textarea
+            id="tema-input"
+            rows="3"
+            placeholder="Ej: Mis mascotas Negro y Teo haciendo travesuras en casa..."
+            style="
+              padding: 8px;
+              border-radius: 5px;
+              border: none;
+              resize: none;
+              font-family: inherit;
+            "
+          ></textarea>
+
+          <button
+            id="btn-generar"
+            class="new-chat-btn"
+            style="margin-bottom: 0"
+          >
+            ✨ Generar y Crear Audios
+          </button>
         </div>
 
-        <h3 style="margin-top: 30px; border-bottom: 1px solid #334155; padding-bottom: 10px; font-size: 14px;">📖 Mi Biblioteca</h3>
-        <div id="lista-historias" class="chat-list" style="margin-top: 10px;"></div>
-
+        <h3
+          style="
+            margin-top: 30px;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 10px;
+            font-size: 14px;
+          "
+        >
+          📖 Mi Biblioteca
+        </h3>
+        <div
+          id="lista-historias"
+          class="chat-list"
+          style="margin-top: 10px"
+        ></div>
       </div>
 
-      <div class="chat-container" style="padding: 20px; overflow-y: auto; background: #fafafa;">
-        <div class="header" style="border-radius: 8px; margin-bottom: 20px; flex-direction: column; align-items: stretch; gap: 15px;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
+      <div
+        class="chat-container"
+        style="padding: 20px; overflow-y: auto; background: #fafafa"
+      >
+        <div
+          class="header"
+          style="
+            border-radius: 8px;
+            margin-bottom: 20px;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 15px;
+          "
+        >
+          <div
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+            "
+          >
             <h2 id="historia-titulo">📚 Reproductor de Historias</h2>
-            <button class="anki-btn" id="btn-play-all">▶ Reproducir Historia</button>
+            <button class="anki-btn" id="btn-play-all">
+              ▶ Reproducir Historia
+            </button>
           </div>
-          <audio id="audio-player" controls style="width: 100%; height: 40px; border-radius: 5px; display: none; outline: none;"></audio>
+          <audio
+            id="audio-player"
+            controls
+            style="
+              width: 100%;
+              height: 40px;
+              border-radius: 5px;
+              display: none;
+              outline: none;
+            "
+          ></audio>
         </div>
 
         <div class="story-controls">
-            <button class="mode-btn active" data-mode="completo">1. Comprensión<br><span style="font-size:11px; font-weight:normal;">(Audio + EN + ES)</span></button>
-            <button class="mode-btn" data-mode="lectura">2. Adquisición<br><span style="font-size:11px; font-weight:normal;">(Audio + EN)</span></button>
-            <button class="mode-btn" data-mode="escucha">3. Inmersión<br><span style="font-size:11px; font-weight:normal;">(Solo Audio)</span></button>
+          <button class="mode-btn active" data-mode="completo">
+            1. Comprensión<br /><span
+              style="font-size: 11px; font-weight: normal"
+              >(Audio + EN + ES)</span
+            >
+          </button>
+          <button class="mode-btn" data-mode="lectura">
+            2. Adquisición<br /><span
+              style="font-size: 11px; font-weight: normal"
+              >(Audio + EN)</span
+            >
+          </button>
+          <button class="mode-btn" data-mode="escucha">
+            3. Inmersión<br /><span style="font-size: 11px; font-weight: normal"
+              >(Solo Audio)</span
+            >
+          </button>
         </div>
 
         <div id="story-board">
-            <div style="text-align: center; color: #94a3b8; margin-top: 50px;">
-                Genera una historia en la barra lateral para comenzar.
-            </div>
+          <div style="text-align: center; color: #94a3b8; margin-top: 50px">
+            Genera una historia en la barra lateral para comenzar.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="floating-anki-btn"
+      style="
+        display: none;
+        position: absolute;
+        background: #27ae60;
+        color: white;
+        padding: 6px 12px;
+        border-radius: 5px;
+        font-size: 12px;
+        font-weight: bold;
+        cursor: pointer;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        z-index: 1000;
+        transition: transform 0.1s;
+      "
+    >
+      🪄 + Anki
+    </div>
+
+    <div id="modal-revision" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>🔍 Revisa tu nueva carta</h3>
+          <span class="close-modal" id="btn-cerrar-modal">&times;</span>
+        </div>
+        <div id="lista-revision" class="lista-revision"></div>
+        <div class="modal-footer">
+          <button id="btn-confirmar-todo" class="confirm-btn">
+            Confirmar e Inyectar a Anki
+          </button>
         </div>
       </div>
     </div>
