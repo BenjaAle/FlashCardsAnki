@@ -64,8 +64,22 @@ def iniciar_bd():
     c.execute(
         """CREATE TABLE IF NOT EXISTS mensajes (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER, rol TEXT, texto TEXT, extraido INTEGER DEFAULT 0)"""
     )
+    
+    # Tabla para guardar historias
+    c.execute("""CREATE TABLE IF NOT EXISTS historias (id INTEGER PRIMARY KEY AUTOINCREMENT, titulo TEXT, tematica TEXT)""")
+    c.execute("""CREATE TABLE IF NOT EXISTS lineas_historia (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                 historia_id INTEGER, 
+                 orden INTEGER, 
+                 oracion_en TEXT, 
+                 oracion_es TEXT, 
+                 ruta_audio TEXT)""")
+    
     conn.commit()
     conn.close()
+    
+    # Crear carpeta para guardar los audios de las historias si no existe
+    os.makedirs("static/audios", exist_ok=True)
 
 
 iniciar_bd()
@@ -106,6 +120,10 @@ class InyectarRequest(BaseModel):
     chat_id: int
     cartas: list
 
+# Estructura para crear una nueva historia
+class NuevaHistoria(BaseModel):
+    tematica: str
+    nivel: str = "Intermedio" # B1/B2 por defecto.
 
 # ==========================================
 # 🔌 FUNCIONES DE ANKI
@@ -558,5 +576,117 @@ async def inyectar_cartas(req: InyectarRequest):
     except Exception as e:
         return {"mensaje": f"⚠️ Error en el procesamiento final: {str(e)}"}
 
+
+# 9. Ruta de historias interactivas
+@app.post("/generar_historia")
+async def generar_historia(req: NuevaHistoria):
+    # 1. Prompt para que Gemini devuelva un JSON perfecto
+    prompt = f"""
+    Eres un experto profesor de inglés. Crea una historia interesante y atractiva sobre el siguiente tema: "{req.tematica}".
+    El nivel de inglés debe ser {req.nivel}.
+    
+    REGLA 1: La historia debe tener entre 8 y 12 oraciones en total.
+    REGLA 2: Devuelve ESTRICTAMENTE un objeto JSON puro, sin formato markdown, ni bloques ```json.
+    
+    Formato esperado:
+    {{
+      "titulo": "Un título corto y atractivo en español",
+      "lineas": [
+        {{"en": "Oración en inglés aquí.", "es": "Traducción natural al español aquí."}},
+        {{"en": "Siguiente oración en inglés.", "es": "Siguiente traducción."}}
+      ]
+    }}
+    """
+    
+    try:
+        # 2. Pedir la historia a Gemini
+        response = client.models.generate_content(
+            model="gemini-2.5-flash", contents=prompt
+        )
+        respuesta_limpia = response.text.replace("```json", "").replace("```", "").strip()
+        datos_historia = json.loads(respuesta_limpia)
+        
+        titulo = datos_historia.get("titulo", "Historia sin título")
+        lineas = datos_historia.get("lineas", [])
+        
+        if not lineas:
+            return {"error": "No se pudieron generar las líneas de la historia."}
+
+        # 3. Guardar la historia principal en la BDD para obtener su ID
+        conn = sqlite3.connect("tutor.db")
+        c = conn.cursor()
+        c.execute("INSERT INTO historias (titulo, tematica) VALUES (?, ?)", (titulo, req.tematica))
+        historia_id = c.lastrowid
+        
+        # 👇 NUEVO: Crear una subcarpeta específica para esta historia
+        carpeta_historia = f"static/audios/historia_{historia_id}"
+        os.makedirs(carpeta_historia, exist_ok=True)
+        
+        # 4. Generar audios de forma concurrente
+        tareas_audio = []
+        rutas_audios = []
+        
+        for i, linea in enumerate(lineas):
+            texto_en = linea.get("en", "").strip()
+            # Ruta única para cada audio dentro de la carpeta static
+            ruta_audio = f"{carpeta_historia}/linea_{i}.mp3"            
+            rutas_audios.append(ruta_audio)
+            
+            # Agregamos a la lista de tareas concurrentes
+            tareas_audio.append(generar_audio(texto_en, ruta_audio))
+            
+        # Ejecutar todos los audios al mismo tiempo
+        if tareas_audio:
+            await asyncio.gather(*tareas_audio)
+            
+        # 5. Guardar las líneas y sus rutas de audio en la BDD
+        for i, linea in enumerate(lineas):
+            c.execute(
+                "INSERT INTO lineas_historia (historia_id, orden, oracion_en, oracion_es, ruta_audio) VALUES (?, ?, ?, ?, ?)",
+                (historia_id, i, linea.get("en", ""), linea.get("es", ""), rutas_audios[i])
+            )
+            
+        conn.commit()
+        conn.close()
+
+        return {
+            "mensaje": "Historia generada y audios creados con éxito.",
+            "historia_id": historia_id,
+            "titulo": titulo
+        }
+
+    except Exception as e:
+        return {"error": f"Error al generar la historia: {str(e)}"}
+
+
+# 1. Pagina html de las historias
+@app.get("/historias", response_class=HTMLResponse)
+def pagina_historias(request: Request):
+    return templates.TemplateResponse(request=request, name="historias.html")
+
+# 2. Obtiene las líneas y audios de una historia específica
+@app.get("/api/historias/{historia_id}")
+def obtener_detalles_historia(historia_id: int):
+    conn = sqlite3.connect("tutor.db")
+    c = conn.cursor()
+    c.execute(
+        "SELECT orden, oracion_en, oracion_es, ruta_audio FROM lineas_historia WHERE historia_id = ? ORDER BY orden ASC", 
+        (historia_id,)
+    )
+    # Importante: Agregamos el "/" al inicio de la ruta del audio para que el HTML lo encuentre bien
+    lineas = [{"orden": row[0], "en": row[1], "es": row[2], "audio": f"/{row[3]}"} for row in c.fetchall()]
+    conn.close()
+    return {"lineas": lineas}
+
+
+# 3. Obtener la lista de historias creadas para la barra lateral
+@app.get("/api/lista_historias")
+def obtener_lista_historias():
+    conn = sqlite3.connect("tutor.db")
+    c = conn.cursor()
+    c.execute("SELECT id, titulo FROM historias ORDER BY id DESC")
+    historias = [{"id": row[0], "titulo": row[1]} for row in c.fetchall()]
+    conn.close()
+    return historias
 
 # uvicorn main:app --reload

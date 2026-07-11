@@ -9,7 +9,31 @@
   <body>
     <div class="app-container">
       <div class="sidebar">
-        <button id="btn-new-chat" class="new-chat-btn">+ Nuevo Chat</button>
+        <div
+          style="
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 20px;
+          "
+        >
+          <button
+            id="btn-new-chat"
+            class="new-chat-btn"
+            style="margin-bottom: 0"
+          >
+            + Nuevo Chat
+          </button>
+
+          <a href="/historias" style="text-decoration: none">
+            <button
+              class="new-chat-btn"
+              style="width: 100%; margin-bottom: 0; background-color: #8e44ad"
+            >
+              📚 Historias IA
+            </button>
+          </a>
+        </div>
 
         <div
           id="new-chat-form"
