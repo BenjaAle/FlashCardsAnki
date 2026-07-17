@@ -16,7 +16,6 @@ from google import genai  # Comunicacion con gemini
 from google.genai import types  # Memoria de chat
 import edge_tts
 
-
 # ==========================================
 # ⚙️ CONFIGURACIÓN GENERAL
 # ==========================================
@@ -64,9 +63,11 @@ def iniciar_bd():
     c.execute(
         """CREATE TABLE IF NOT EXISTS mensajes (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER, rol TEXT, texto TEXT, extraido INTEGER DEFAULT 0)"""
     )
-    
+
     # Tabla para guardar historias
-    c.execute("""CREATE TABLE IF NOT EXISTS historias (id INTEGER PRIMARY KEY AUTOINCREMENT, titulo TEXT, tematica TEXT)""")
+    c.execute(
+        """CREATE TABLE IF NOT EXISTS historias (id INTEGER PRIMARY KEY AUTOINCREMENT, titulo TEXT, tematica TEXT)"""
+    )
     c.execute("""CREATE TABLE IF NOT EXISTS lineas_historia (
                  id INTEGER PRIMARY KEY AUTOINCREMENT, 
                  historia_id INTEGER, 
@@ -74,10 +75,10 @@ def iniciar_bd():
                  oracion_en TEXT, 
                  oracion_es TEXT, 
                  ruta_audio TEXT)""")
-    
+
     conn.commit()
     conn.close()
-    
+
     # Crear carpeta para guardar los audios de las historias si no existe
     os.makedirs("static/audios", exist_ok=True)
 
@@ -120,14 +121,22 @@ class InyectarRequest(BaseModel):
     chat_id: int
     cartas: list
 
+
 # Estructura para crear una nueva historia
 class NuevaHistoria(BaseModel):
     tematica: str
     nivel: str = "Avanzado"
 
+
 class CartaUnicaRequest(BaseModel):
     palabra: str
     contexto: str
+
+
+class EntrenamientoPares(BaseModel):
+    fonema_1: str
+    fonema_2: str
+
 
 # ==========================================
 # 🔌 FUNCIONES DE ANKI
@@ -378,7 +387,9 @@ async def inyectar_cartas(req: InyectarRequest):
 
         for i, carta in enumerate(req.cartas):
             texto_frente = str(carta.get("frente", "")).strip()
-            nombre_limpio = "".join(c if c.isalnum() else "_" for c in texto_frente[:15])
+            nombre_limpio = "".join(
+                c if c.isalnum() else "_" for c in texto_frente[:15]
+            )
 
             # 1. Preparar audio del Frente
             texto_audio_frente = (
@@ -390,23 +401,32 @@ async def inyectar_cartas(req: InyectarRequest):
             nombre_archivo_frente = f"ia_audio_frente_{nombre_limpio}_{i}.mp3"
             if texto_audio_frente:
                 # Agregamos la corrutina a la lista de tareas (sin ejecutarla aún)
-                tareas_audio.append(generar_audio(texto_audio_frente, nombre_archivo_frente))
+                tareas_audio.append(
+                    generar_audio(texto_audio_frente, nombre_archivo_frente)
+                )
 
             # 2. Preparar audios de los Ejemplos Múltiples
             texto_ejemplo = str(carta.get("ejemplo_ingles", "")).strip()
             if texto_ejemplo:
-                oraciones_en = [o.strip() for o in texto_ejemplo.split("|") if o.strip()]
+                oraciones_en = [
+                    o.strip() for o in texto_ejemplo.split("|") if o.strip()
+                ]
                 for j, oracion_en in enumerate(oraciones_en):
-                    texto_audio_ejemplo = oracion_en.replace("**", "").replace("*", "").strip()
-                    nombre_archivo_ejemplo = f"ia_audio_ejemplo_{nombre_limpio}_{i}_{j}.mp3"
+                    texto_audio_ejemplo = (
+                        oracion_en.replace("**", "").replace("*", "").strip()
+                    )
+                    nombre_archivo_ejemplo = (
+                        f"ia_audio_ejemplo_{nombre_limpio}_{i}_{j}.mp3"
+                    )
                     if texto_audio_ejemplo:
                         # Agregamos la corrutina a la lista de tareas
-                        tareas_audio.append(generar_audio(texto_audio_ejemplo, nombre_archivo_ejemplo))
+                        tareas_audio.append(
+                            generar_audio(texto_audio_ejemplo, nombre_archivo_ejemplo)
+                        )
 
         # Disparamos todas las descargas de audio simultáneamente a internet y esperamos que terminen
         if tareas_audio:
             await asyncio.gather(*tareas_audio)
-
 
         # ------------------------------------------------------------------
         # 🌟 FASE 2: INYECCIÓN SECUENCIAL A ANKI (Los archivos ya existen en disco)
@@ -421,9 +441,14 @@ async def inyectar_cartas(req: InyectarRequest):
 
             categoria_elegida = str(carta.get("categoria", "Vocabulario")).strip()
             categorias_validas = [
-                "Vocabulario", "Phrasal Verbs", "Falsos Amigos", 
-                "Verbos Irregulares", "Gramatica y Teoria", 
-                "Expresiones Nativas", "Colocaciones", "Otros"
+                "Vocabulario",
+                "Phrasal Verbs",
+                "Falsos Amigos",
+                "Verbos Irregulares",
+                "Gramatica y Teoria",
+                "Expresiones Nativas",
+                "Colocaciones",
+                "Otros",
             ]
             if categoria_elegida not in categorias_validas:
                 categoria_elegida = "Otros"
@@ -435,7 +460,9 @@ async def inyectar_cartas(req: InyectarRequest):
             except:
                 pass
 
-            nombre_limpio = "".join(c if c.isalnum() else "_" for c in texto_frente[:15])
+            nombre_limpio = "".join(
+                c if c.isalnum() else "_" for c in texto_frente[:15]
+            )
 
             def md_a_html(texto):
                 texto = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", texto)
@@ -473,7 +500,10 @@ async def inyectar_cartas(req: InyectarRequest):
                                 filename=nombre_archivo_img,
                                 data=base64.b64encode(img_data).decode("utf-8"),
                             )
-                            texto_reverso_final = f"<img src='{nombre_archivo_img}'><br><br>" + texto_reverso_final
+                            texto_reverso_final = (
+                                f"<img src='{nombre_archivo_img}'><br><br>"
+                                + texto_reverso_final
+                            )
                 except:
                     pass
 
@@ -496,8 +526,14 @@ async def inyectar_cartas(req: InyectarRequest):
 
             # 3. VINCULAR AUDIOS DE EJEMPLOS MÚLTIPLES
             if texto_ejemplo:
-                oraciones_en = [o.strip() for o in texto_ejemplo.split("|") if o.strip()]
-                oraciones_es = [o.strip() for o in traduccion_ejemplo.split("|") if o.strip()] if traduccion_ejemplo else []
+                oraciones_en = [
+                    o.strip() for o in texto_ejemplo.split("|") if o.strip()
+                ]
+                oraciones_es = (
+                    [o.strip() for o in traduccion_ejemplo.split("|") if o.strip()]
+                    if traduccion_ejemplo
+                    else []
+                )
 
                 if traduccion_ejemplo and len(oraciones_en) != len(oraciones_es):
                     oraciones_en = [texto_ejemplo.replace("|", "")]
@@ -505,8 +541,12 @@ async def inyectar_cartas(req: InyectarRequest):
 
                 for j, oracion_en in enumerate(oraciones_en):
                     oracion_en_html = md_a_html(oracion_en)
-                    oracion_es_html = md_a_html(oraciones_es[j]) if j < len(oraciones_es) else ""
-                    nombre_archivo_ejemplo = f"ia_audio_ejemplo_{nombre_limpio}_{i}_{j}.mp3"
+                    oracion_es_html = (
+                        md_a_html(oraciones_es[j]) if j < len(oraciones_es) else ""
+                    )
+                    nombre_archivo_ejemplo = (
+                        f"ia_audio_ejemplo_{nombre_limpio}_{i}_{j}.mp3"
+                    )
                     audio_tag = ""
 
                     # Vincular si el archivo fue creado con éxito en la Fase 1
@@ -571,11 +611,16 @@ async def inyectar_cartas(req: InyectarRequest):
         # Marcar mensajes como extraídos
         conn = sqlite3.connect("tutor.db")
         c = conn.cursor()
-        c.execute("UPDATE mensajes SET extraido = 1 WHERE chat_id = ? AND extraido = 0", (req.chat_id,))
+        c.execute(
+            "UPDATE mensajes SET extraido = 1 WHERE chat_id = ? AND extraido = 0",
+            (req.chat_id,),
+        )
         conn.commit()
         conn.close()
 
-        return {"mensaje": f"🎉 ¡Éxito! Se inyectaron {cartas_agregadas} cartas revisadas en tiempo récord gracias a la concurrencia."}
+        return {
+            "mensaje": f"🎉 ¡Éxito! Se inyectaron {cartas_agregadas} cartas revisadas en tiempo récord gracias a la concurrencia."
+        }
 
     except Exception as e:
         return {"mensaje": f"⚠️ Error en el procesamiento final: {str(e)}"}
@@ -601,62 +646,73 @@ async def generar_historia(req: NuevaHistoria):
       ]
     }}
     """
-    
+
     try:
         # 2. Pedir la historia a Gemini
         response = client.models.generate_content(
             model="gemini-2.5-flash", contents=prompt
         )
-        respuesta_limpia = response.text.replace("```json", "").replace("```", "").strip()
+        respuesta_limpia = (
+            response.text.replace("```json", "").replace("```", "").strip()
+        )
         datos_historia = json.loads(respuesta_limpia)
-        
+
         titulo = datos_historia.get("titulo", "Historia sin título")
         lineas = datos_historia.get("lineas", [])
-        
+
         if not lineas:
             return {"error": "No se pudieron generar las líneas de la historia."}
 
         # 3. Guardar la historia principal en la BDD para obtener su ID
         conn = sqlite3.connect("tutor.db")
         c = conn.cursor()
-        c.execute("INSERT INTO historias (titulo, tematica) VALUES (?, ?)", (titulo, req.tematica))
+        c.execute(
+            "INSERT INTO historias (titulo, tematica) VALUES (?, ?)",
+            (titulo, req.tematica),
+        )
         historia_id = c.lastrowid
-        
+
         # 👇 NUEVO: Crear una subcarpeta específica para esta historia
         carpeta_historia = f"static/audios/historia_{historia_id}"
         os.makedirs(carpeta_historia, exist_ok=True)
-        
+
         # 4. Generar audios de forma concurrente
         tareas_audio = []
         rutas_audios = []
-        
+
         for i, linea in enumerate(lineas):
             texto_en = linea.get("en", "").strip()
             # Ruta única para cada audio dentro de la carpeta static
-            ruta_audio = f"{carpeta_historia}/linea_{i}.mp3"            
+            ruta_audio = f"{carpeta_historia}/linea_{i}.mp3"
             rutas_audios.append(ruta_audio)
-            
+
             # Agregamos a la lista de tareas concurrentes
             tareas_audio.append(generar_audio(texto_en, ruta_audio))
-            
+
         # Ejecutar todos los audios al mismo tiempo
         if tareas_audio:
             await asyncio.gather(*tareas_audio)
-            
+
         # 5. Guardar las líneas y sus rutas de audio en la BDD
         for i, linea in enumerate(lineas):
             c.execute(
                 "INSERT INTO lineas_historia (historia_id, orden, oracion_en, oracion_es, ruta_audio) VALUES (?, ?, ?, ?, ?)",
-                (historia_id, i, linea.get("en", ""), linea.get("es", ""), rutas_audios[i])
+                (
+                    historia_id,
+                    i,
+                    linea.get("en", ""),
+                    linea.get("es", ""),
+                    rutas_audios[i],
+                ),
             )
-            
+
         conn.commit()
         conn.close()
 
         return {
             "mensaje": "Historia generada y audios creados con éxito.",
             "historia_id": historia_id,
-            "titulo": titulo
+            "titulo": titulo,
         }
 
     except Exception as e:
@@ -668,17 +724,21 @@ async def generar_historia(req: NuevaHistoria):
 def pagina_historias(request: Request):
     return templates.TemplateResponse(request=request, name="historias.html")
 
+
 # 2. Obtiene las líneas y audios de una historia específica
 @app.get("/api/historias/{historia_id}")
 def obtener_detalles_historia(historia_id: int):
     conn = sqlite3.connect("tutor.db")
     c = conn.cursor()
     c.execute(
-        "SELECT orden, oracion_en, oracion_es, ruta_audio FROM lineas_historia WHERE historia_id = ? ORDER BY orden ASC", 
-        (historia_id,)
+        "SELECT orden, oracion_en, oracion_es, ruta_audio FROM lineas_historia WHERE historia_id = ? ORDER BY orden ASC",
+        (historia_id,),
     )
     # Importante: Agregamos el "/" al inicio de la ruta del audio para que el HTML lo encuentre bien
-    lineas = [{"orden": row[0], "en": row[1], "es": row[2], "audio": f"/{row[3]}"} for row in c.fetchall()]
+    lineas = [
+        {"orden": row[0], "en": row[1], "es": row[2], "audio": f"/{row[3]}"}
+        for row in c.fetchall()
+    ]
     conn.close()
     return {"lineas": lineas}
 
@@ -692,6 +752,7 @@ def obtener_lista_historias():
     historias = [{"id": row[0], "titulo": row[1]} for row in c.fetchall()]
     conn.close()
     return historias
+
 
 # 4. Proponer una carta única para un término específico
 @app.post("/proponer_carta_unica")
@@ -724,16 +785,170 @@ def proponer_carta_unica(req: CartaUnicaRequest):
         response = client.models.generate_content(
             model="gemini-2.5-flash", contents=prompt
         )
-        respuesta_limpia = response.text.replace("```json", "").replace("```", "").strip()
-        
+        respuesta_limpia = (
+            response.text.replace("```json", "").replace("```", "").strip()
+        )
+
         datos_brutos = json.loads(respuesta_limpia)
         if isinstance(datos_brutos, dict):
-            lista_cartas = next((v for v in datos_brutos.values() if isinstance(v, list)), [])
+            lista_cartas = next(
+                (v for v in datos_brutos.values() if isinstance(v, list)), []
+            )
         else:
             lista_cartas = datos_brutos if isinstance(datos_brutos, list) else []
 
         return {"cartas": lista_cartas}
     except Exception as e:
         return {"error": f"Error al generar propuesta: {str(e)}"}
+
+
+# ==========================================
+# 🗣️ RUTAS DE LABORATORIO DE PRONUNCIACIÓN
+# ==========================================
+
+
+# 1. Servir la vista HTML
+@app.get("/fonetica", response_class=HTMLResponse)
+def pagina_fonetica(request: Request):
+    return templates.TemplateResponse(request=request, name="fonetica.html")
+
+
+# 2. Base de datos estática de los 44 fonemas del inglés (Con transcripción IPA)
+@app.get("/api/fonemas")
+def obtener_fonemas():
+    fonemas_prioritarios = [
+        # --- VOCALES (12) ---
+        {"id": "schwa", "simbolo": "/ə/", "nombre": "El Schwa (Sonido Rey)", "desc": "Relaja TODA la boca y la lengua. No muevas los labios. Haz un sonido corto y gutural desde la garganta.", "ejemplos": ["about (/əˈbaʊt/)", "taken (/ˈteɪkən/)", "pencil (/ˈpɛnsəl/)"]},
+        {"id": "i_corta", "simbolo": "/ɪ/", "nombre": "La 'i' Corta", "desc": "Boca relajada, un poco abierta. NO sonrías. Suena a medio camino entre tu 'e' y tu 'i'.", "ejemplos": ["ship (/ʃɪp/)", "sit (/sɪt/)", "kid (/kɪd/)"]},
+        {"id": "i_larga", "simbolo": "/iː/", "nombre": "La 'i' Larga", "desc": "Estira los labios tensándolos como si sonrieras grande. Tensa la lengua hacia arriba y adelante.", "ejemplos": ["sheep (/ʃiːp/)", "seat (/siːt/)", "key (/kiː/)"]},
+        {"id": "u_corta", "simbolo": "/ʊ/", "nombre": "La 'u' Corta", "desc": "Labios ligeramente redondeados pero muy relajados (no apretados). Lengua hacia atrás.", "ejemplos": ["book (/bʊk/)", "put (/pʊt/)", "good (/ɡʊd/)"]},
+        {"id": "u_larga", "simbolo": "/uː/", "nombre": "La 'u' Larga", "desc": "Haz un círculo pequeño y muy apretado con los labios (como para soplar una vela). Tensa la boca.", "ejemplos": ["blue (/bluː/)", "food (/fuːd/)", "shoe (/ʃuː/)"]},
+        {"id": "e_corta", "simbolo": "/e/", "nombre": "La 'e' Corta", "desc": "Abre la boca un poco más, labios relajados, lengua en el centro. (Igual a la 'e' de España).", "ejemplos": ["bed (/bɛd/)", "red (/rɛd/)", "head (/hɛd/)"]},
+        {"id": "schwa_largo", "simbolo": "/ɜː/", "nombre": "El Schwa Largo", "desc": "Boca entreabierta y relajada, lengua plana. Haz vibrar la garganta de forma alargada.", "ejemplos": ["bird (/bɜːrd/)", "work (/wɜːrk/)", "learn (/lɜːrn/)"]},
+        {"id": "o_larga", "simbolo": "/ɔː/", "nombre": "La 'o' Larga", "desc": "Abre la boca formando una 'O' vertical alta, tensa los labios. Lengua plana y atrás.", "ejemplos": ["door (/dɔːr/)", "more (/mɔːr/)", "board (/bɔːrd/)"]},
+        {"id": "a_gato", "simbolo": "/æ/", "nombre": "La 'A' Abierta", "desc": "Boca ABIERTA hacia abajo al máximo. Estira los labios a los lados y empuja la lengua hacia adelante. Intenta decir 'a' pero sonando a 'e'.", "ejemplos": ["cat (/kæt/)", "black (/blæk/)", "map (/mæp/)"]},
+        {"id": "a_neutra", "simbolo": "/ʌ/", "nombre": "La 'a' Neutra", "desc": "Boca semiabierta. Lengua relajada. Da un golpe de sonido corto y seco desde la garganta.", "ejemplos": ["cup (/kʌp/)", "luck (/lʌk/)", "blood (/blʌd/)"]},
+        {"id": "a_larga", "simbolo": "/ɑː/", "nombre": "La 'a' Larga", "desc": "Abre la boca al máximo (como en el dentista). Lengua totalmente plana abajo. Sonido largo.", "ejemplos": ["car (/kɑːr/)", "father (/ˈfɑːðər/)", "star (/stɑːr/)"]},
+        {"id": "o_corta", "simbolo": "/ɒ/", "nombre": "La 'o' Corta", "desc": "Labios en forma redonda pero con la mandíbula caída muy abierta. Golpe de voz corto.", "ejemplos": ["hot (/hɒt/)", "box (/bɒks/)", "stop (/stɒp/)"]},
+
+        # --- DIPTONGOS (8) ---
+        {"id": "dip_ei", "simbolo": "/eɪ/", "nombre": "Diptongo EI", "desc": "Empieza con boca abierta relajada y ciérrala estirando a una sonrisa tensa.", "ejemplos": ["day (/deɪ/)", "say (/seɪ/)", "make (/meɪk/)"]},
+        {"id": "dip_ai", "simbolo": "/aɪ/", "nombre": "Diptongo AI", "desc": "Abre la boca en grande y deslízala cerrando hacia una sonrisa tensa.", "ejemplos": ["my (/maɪ/)", "eye (/aɪ/)", "time (/taɪm/)"]},
+        {"id": "dip_oi", "simbolo": "/ɔɪ/", "nombre": "Diptongo OI", "desc": "Empieza con labios en 'O' redonda y desliza hacia una sonrisa estirada.", "ejemplos": ["boy (/bɔɪ/)", "toy (/tɔɪ/)", "coin (/kɔɪn/)"]},
+        {"id": "dip_au", "simbolo": "/aʊ/", "nombre": "Diptongo AU", "desc": "Abre la boca en grande y ciérrala haciendo un círculo apretado con los labios.", "ejemplos": ["now (/naʊ/)", "how (/haʊ/)", "house (/haʊs/)"]},
+        {"id": "dip_ou", "simbolo": "/oʊ/", "nombre": "Diptongo OU", "desc": "Haz una 'O' relajada y aprieta los labios hasta hacer un círculo pequeñito.", "ejemplos": ["go (/ɡoʊ/)", "no (/noʊ/)", "show (/ʃoʊ/)"]},
+        {"id": "dip_ia", "simbolo": "/ɪə/", "nombre": "Diptongo IA", "desc": "Empieza con sonrisa relajada y suelta la tensión volviendo al centro (Schwa).", "ejemplos": ["here (/hɪər/)", "near (/nɪər/)", "idea (/aɪˈdɪə/)"]},
+        {"id": "dip_ea", "simbolo": "/eə/", "nombre": "Diptongo EA", "desc": "Empieza con boca entreabierta y relaja toda la boca volviendo al centro (Schwa).", "ejemplos": ["hair (/heər/)", "there (/ðeər/)", "care (/keər/)"]},
+        {"id": "dip_ua", "simbolo": "/ʊə/", "nombre": "Diptongo UA", "desc": "Empieza con labios redondeados y relájalos completamente (Schwa).", "ejemplos": ["tour (/tʊər/)", "pure (/pjʊər/)", "cure (/kjʊər/)"]},
+
+        # --- CONSONANTES (24) ---
+        {"id": "p_fuerte", "simbolo": "/p/", "nombre": "La 'P' Explosiva", "desc": "Junta los labios apretados. Suelta el aire de golpe estallando. SIN vibrar la garganta.", "ejemplos": ["pen (/pɛn/)", "top (/tɒp/)", "push (/pʊʃ/)"]},
+        {"id": "b_fuerte", "simbolo": "/b/", "nombre": "La 'B' Fuerte", "desc": "Junta los labios. Suelta el aire de golpe, pero HACIENDO VIBRAR la garganta.", "ejemplos": ["berry (/ˈbɛri/)", "bowel (/ˈbaʊəl/)", "back (/bæk/)"]},
+        {"id": "t_fuerte", "simbolo": "/t/", "nombre": "La 'T' Explosiva", "desc": "Punta de la lengua justo detrás de los dientes superiores. Estalla el aire. SIN vibrar.", "ejemplos": ["time (/taɪm/)", "cat (/kæt/)", "tell (/tɛl/)"]},
+        {"id": "d_fuerte", "simbolo": "/d/", "nombre": "La 'D' Fuerte", "desc": "Lengua detrás de los dientes superiores. Suelta el aire VIBRANDO la garganta.", "ejemplos": ["dog (/dɒɡ/)", "day (/deɪ/)", "bed (/bɛd/)"]},
+        {"id": "k_fuerte", "simbolo": "/k/", "nombre": "La 'K' Fuerte", "desc": "Sube la parte de atrás de la lengua para bloquear la garganta. Estalla el aire. SIN vibrar.", "ejemplos": ["cat (/kæt/)", "key (/kiː/)", "back (/bæk/)"]},
+        {"id": "g_fuerte", "simbolo": "/g/", "nombre": "La 'G' Fuerte", "desc": "Igual que la /k/, pero VIBRANDO fuertemente la garganta.", "ejemplos": ["go (/ɡoʊ/)", "get (/ɡɛt/)", "big (/bɪɡ/)"]},
+        {"id": "f_suave", "simbolo": "/f/", "nombre": "La 'F'", "desc": "Apoya los dientes superiores sobre tu labio inferior. Sopla aire. SIN vibrar.", "ejemplos": ["fly (/flaɪ/)", "four (/fɔːr/)", "leaf (/liːf/)"]},
+        {"id": "v_labio", "simbolo": "/v/", "nombre": "La 'V' Vibrante", "desc": "Dientes superiores sobre labio inferior. Sopla aire y VIBRA la garganta fuerte (cosquillas en el labio).", "ejemplos": ["very (/ˈvɛri/)", "vowel (/ˈvaʊəl/)", "save (/seɪv/)"]},
+        {"id": "th_sordo", "simbolo": "/θ/", "nombre": "El 'TH' Sordo", "desc": "Saca la punta de la lengua entre los dientes. Sopla aire continuo. SIN vibrar la garganta.", "ejemplos": ["think (/θɪŋk/)", "math (/mæθ/)", "both (/boʊθ/)"]},
+        {"id": "th_sonoro", "simbolo": "/ð/", "nombre": "El 'TH' Vibrante", "desc": "Lengua entre los dientes. Sopla aire y VIBRA la garganta (se siente como un zumbido de abeja).", "ejemplos": ["this (/ðɪs/)", "mother (/ˈmʌðər/)", "breathe (/briːð/)"]},
+        {"id": "s_suave", "simbolo": "/s/", "nombre": "La 'S' Suave", "desc": "Junta los dientes, lengua detrás. Sopla aire siseando. SIN vibrar.", "ejemplos": ["sue (/suː/)", "bus (/bʌs/)", "face (/feɪs/)"]},
+        {"id": "z_vibra", "simbolo": "/z/", "nombre": "La 'Z' de Abeja", "desc": "Junta los dientes. Sopla aire y VIBRA la garganta fuerte (imita a una mosca/abeja).", "ejemplos": ["zoo (/zuː/)", "buzz (/bʌz/)", "phase (/feɪz/)"]},
+        {"id": "sh_silencio", "simbolo": "/ʃ/", "nombre": "El sonido 'SH'", "desc": "Empuja los labios hacia afuera (como pidiendo silencio 'shhh'). Sopla aire. SIN vibrar.", "ejemplos": ["she (/ʃiː/)", "shoe (/ʃuː/)", "crash (/kræʃ/)"]},
+        {"id": "zh_suave", "simbolo": "/ʒ/", "nombre": "La 'SH' Vibrante", "desc": "Labios hacia afuera como 'shhh', pero VIBRANDO la garganta (como un motor).", "ejemplos": ["measure (/ˈmɛʒər/)", "vision (/ˈvɪʒən/)", "television (/ˈtɛlɪvɪʒən/)"]},
+        {"id": "h_aire", "simbolo": "/h/", "nombre": "La 'H' Aspirada", "desc": "Abre la boca relajada y exhala aire desde el fondo (como empañando un espejo). SIN raspar.", "ejemplos": ["hat (/hæt/)", "home (/hoʊm/)", "hello (/həˈloʊ/)"]},
+        {"id": "ch_fuerte", "simbolo": "/tʃ/", "nombre": "El sonido 'CH'", "desc": "Empieza con la lengua tocando el paladar (T) y explota hacia afuera con labios redondos (SH).", "ejemplos": ["chair (/tʃeər/)", "cheese (/tʃiːz/)", "match (/mætʃ/)"]},
+        {"id": "j_fuerte", "simbolo": "/dʒ/", "nombre": "La 'J' Inglesa", "desc": "Igual que CH, pero VIBRANDO la garganta. Suena fuerte y golpeado.", "ejemplos": ["job (/dʒɒb/)", "juice (/dʒuːs/)", "age (/eɪdʒ/)"]},
+        {"id": "m_nasal", "simbolo": "/m/", "nombre": "La 'M' Nasal", "desc": "Junta los labios. No sueltes aire por la boca, sácalo por la nariz y VIBRA la garganta.", "ejemplos": ["man (/mæn/)", "make (/meɪk/)", "time (/taɪm/)"]},
+        {"id": "n_nasal", "simbolo": "/n/", "nombre": "La 'N' Nasal", "desc": "Lengua presionando detrás de los dientes de arriba. Aire por la nariz y VIBRA.", "ejemplos": ["no (/noʊ/)", "name (/neɪm/)", "sun (/sʌn/)"]},
+        {"id": "ng_nasal", "simbolo": "/ŋ/", "nombre": "La 'NG' Nasal", "desc": "Parte de atrás de la lengua sube y bloquea la garganta. Aire por la nariz y VIBRA.", "ejemplos": ["sing (/sɪŋ/)", "king (/kɪŋ/)", "ring (/rɪŋ/)"]},
+        {"id": "l_lateral", "simbolo": "/l/", "nombre": "La 'L'", "desc": "Punta de la lengua firme contra el paladar. Deja que el aire escape por los lados de la lengua.", "ejemplos": ["leg (/lɛɡ/)", "love (/lʌv/)", "feel (/fiːl/)"]},
+        {"id": "r_suave", "simbolo": "/r/", "nombre": "La 'R' Inglesa", "desc": "Tira la lengua hacia ATRÁS sin tocar el paladar en absoluto. Redondea los labios. VIBRA.", "ejemplos": ["red (/rɛd/)", "run (/rʌn/)", "car (/kɑːr/)"]},
+        {"id": "w_desliza", "simbolo": "/w/", "nombre": "La 'W'", "desc": "Círculo pequeño y tenso con los labios. Desliza rápido hacia el siguiente sonido vocal.", "ejemplos": ["we (/wiː/)", "water (/ˈwɔːtər/)", "win (/wɪn/)"]},
+        {"id": "y_desliza", "simbolo": "/j/", "nombre": "La 'Y'", "desc": "Lengua arriba casi tocando el paladar (como sonriendo tensamente). Desliza rápido a la vocal.", "ejemplos": ["yes (/jɛs/)", "yellow (/ˈjɛloʊ/)", "you (/juː/)"]}
+    ]
+    return fonemas_prioritarios
+
+# 2.5 Base de datos estática de Reglas de Connected Speech
+@app.get("/api/connected_speech")
+def obtener_connected_speech():
+    reglas = [
+        {"id": "assim_t", "regla": "T + Y = CH", "nombre": "Asimilación de la T", "desc": "Cuando una palabra termina en sonido /t/ y la siguiente empieza con /j/ (y), se fusionan en CH.", "ejemplos": ["Don't you (Donchu)", "Let you (Lechu)", "Meet you (Meechu)"]},
+        {"id": "assim_d", "regla": "D + Y = J", "nombre": "Asimilación de la D", "desc": "Cuando una palabra termina en sonido /d/ y la siguiente empieza con /j/ (y), se fusionan en la J inglesa vibrante.", "ejemplos": ["Did you (Didja)", "Would you (Woulja)", "Find you (Finja)"]},
+        {"id": "flap_t", "regla": "La Flap 'T'", "nombre": "La 'T' Americana", "desc": "En USA, cuando una 't' o 'tt' queda atrapada entre dos sonidos vocales, se pronuncia como una 'r' suave y rápida.", "ejemplos": ["Water (Wader)", "Better (Beder)", "City (Cidy)"]},
+        {"id": "elision_h", "regla": "Adiós a la 'H'", "nombre": "Elisión de Pronombres", "desc": "La 'h' inicial en him, her, he, his a menudo desaparece al hablar rápido porque el aire no se detiene.", "ejemplos": ["Tell him (Tellim)", "Call her (Caller)", "I like his (I likis)"]},
+        {"id": "link_cv", "regla": "Consonante + Vocal", "nombre": "Linking C-V", "desc": "Si una palabra termina en consonante y la otra empieza en vocal, se unen como si fueran una sola palabra larga.", "ejemplos": ["Stop it (Sto pit)", "Not at all (No ta tall)", "An apple (A napple)"]},
+        {"id": "reductions", "regla": "Reducciones", "nombre": "Palabras Perezosas", "desc": "Palabras estructurales (to, for, and, of) se relajan tanto que se convierten en un simple Schwa.", "ejemplos": ["Rock and roll (Rock n roll)", "Going to (Gonna)", "Want to (Wanna)"]}
+    ]
+    return reglas
+
+# 3. El Motor del "Gimnasio" (Minijuego de Pares Mínimos)
+@app.post("/api/entrenar_pares")
+async def entrenar_pares(req: EntrenamientoPares):
+    prompt = f"""
+    Eres un experto en fonética inglesa. El alumno hispanohablante confunde los fonemas {req.fonema_1} y {req.fonema_2}.
+    Genera EXACTAMENTE 4 pares mínimos que contrasten ambos sonidos. 
+    IMPORTANTE: La clave "correcta" debe contener ESTRICTAMENTE el texto "opcion_a" o "opcion_b", no la palabra.
+    
+    Devuelve ESTRICTAMENTE un arreglo JSON puro, sin comillas triples ni formato markdown.
+    Formato:
+    [
+      {{"opcion_a": "ship", "opcion_b": "sheep", "correcta": "opcion_a"}},
+      {{"opcion_a": "eat", "opcion_b": "it", "correcta": "opcion_b"}}
+    ]
+    """
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash", contents=prompt
+        )
+
+        # 1. Limpieza ultra-agresiva por si Gemini añade formato Markdown
+        texto = response.text.strip()
+        if texto.startswith("```json"):
+            texto = texto[7:]
+        if texto.startswith("```"):
+            texto = texto[3:]
+        if texto.endswith("```"):
+            texto = texto[:-3]
+
+        respuesta_limpia = texto.strip()
+        pares = json.loads(respuesta_limpia)
+
+        os.makedirs("static/audios/fonetica", exist_ok=True)
+        tareas_audio = []
+
+        for i, par in enumerate(pares):
+            # 2. Blindaje: ¿Qué pasa si Gemini puso "ship" en lugar de "opcion_a"?
+            valor_correcta = str(par.get("correcta", "opcion_a")).lower()
+
+            if valor_correcta in ["opcion_a", "opcion_b"]:
+                palabra_correcta = par.get(valor_correcta, "error")
+            else:
+                # Si se equivocó, asumimos que escribió la palabra directamente y lo autocorregimos
+                palabra_correcta = valor_correcta
+                if par.get("opcion_a", "").lower() == palabra_correcta.lower():
+                    par["correcta"] = "opcion_a"
+                else:
+                    par["correcta"] = "opcion_b"
+
+            # 3. Limpiar caracteres raros en el nombre del archivo para evitar errores de Windows/Mac
+            nombre_limpio = "".join(c if c.isalnum() else "_" for c in palabra_correcta)
+            ruta_audio = f"static/audios/fonetica/par_{i}_{nombre_limpio}.mp3"
+            par["ruta_audio"] = ruta_audio
+
+            # Generamos el audio
+            tareas_audio.append(generar_audio(palabra_correcta, ruta_audio))
+
+        if tareas_audio:
+            await asyncio.gather(*tareas_audio)
+
+        return {"pares": pares}
+
+    except Exception as e:
+        # Esto imprimirá el error real en tu consola negra (uvicorn)
+        print(f"🚨 ERROR EN EL BACKEND: {str(e)}")
+        return {"error": f"Error interno: {str(e)}"}
+
+
 
 # uvicorn main:app --reload
