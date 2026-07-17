@@ -123,7 +123,7 @@ class InyectarRequest(BaseModel):
 # Estructura para crear una nueva historia
 class NuevaHistoria(BaseModel):
     tematica: str
-    nivel: str = "Intermedio" # B1/B2 por defecto.
+    nivel: str = "Avanzado"
 
 class CartaUnicaRequest(BaseModel):
     palabra: str
@@ -693,6 +693,7 @@ def obtener_lista_historias():
     conn.close()
     return historias
 
+# 4. Proponer una carta única para un término específico
 @app.post("/proponer_carta_unica")
 def proponer_carta_unica(req: CartaUnicaRequest):
     prompt = f"""
@@ -715,6 +716,8 @@ def proponer_carta_unica(req: CartaUnicaRequest):
     REGLA 3 (VERBOS): Si es un verbo, crea ejemplos según su tipo (2 si es regular, 3 si es irregular). Separa cada ejemplo usando " | ".
     REGLA 4 (PHRASAL VERBS): Si es phrasal verb, añade su tipo entre paréntesis en el frente, enumera significados en el reverso, y da un ejemplo por cada significado, separados por " | ".
     REGLA 5 (IMÁGENES): "termino_imagen" NUNCA debe estar vacío. Usa palabras abstractas en inglés si es necesario.
+    REGLA 6 : Si el término tiene múltiples significados, crea un ejemplo en inglés y su traducción al español para cada significado, separados por " | ".
+    REGLA 7: Siempre incluye como minimo 2 ejemplos.
     """
 
     try:
