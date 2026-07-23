@@ -1,106 +1,62 @@
-/* Estilos generales */
-body {
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  background-color: #f4f7f6;
-  margin: 0;
-  display: flex;
-  height: 100vh;
-  overflow: hidden;
-}
-.app-container {
-  display: flex;
-  width: 100%;
-  height: 100%;
-}
-
-/* 🌟 ESTILOS DE LA BARRA LATERAL */
-.sidebar {
-  width: 280px;
-  background-color: #1e293b;
-  color: white;
+.sidebar-actions {
   display: flex;
   flex-direction: column;
-  padding: 15px;
-  box-sizing: border-box;
-}
-.new-chat-btn {
-  background-color: #3b82f6;
-  color: white;
-  border: none;
-  padding: 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: bold;
+  gap: 10px;
   margin-bottom: 20px;
-  font-size: 16px;
-  transition: 0.2s;
 }
-.new-chat-btn:hover {
-  background-color: #2563eb;
+
+.sidebar-link {
+  text-decoration: none;
 }
-.chat-list {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
+
+.btn-compact {
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.btn-historias {
+  background-color: #8e44ad;
+}
+
+.btn-fonetica {
+  background-color: #f39c12;
+}
+
+.new-chat-form {
+  display: none;
   flex-direction: column;
   gap: 8px;
+  margin-bottom: 20px;
 }
-/* Ajustes avanzados para la lista de chats */
-.chat-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 12px;
-  background-color: #334155;
+
+.new-chat-input {
+  padding: 10px;
   border-radius: 6px;
-  cursor: pointer;
-  font-size: 15px;
-  transition: 0.2s;
-}
-.chat-item:hover {
-  background-color: #475569;
-}
-.chat-item.active {
-  background-color: #3b82f6;
-  font-weight: bold;
+  border: none;
+  font-size: 14px;
 }
 
-.chat-item-title {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
-  margin-right: 5px;
-}
-
-/* Botones de acción ocultos por defecto */
-.chat-item-actions {
-  display: none;
+.new-chat-actions {
+  display: flex;
   gap: 5px;
 }
-.chat-item:hover .chat-item-actions {
-  display: flex;
-} /* Aparecen al pasar el mouse */
 
-.action-btn {
-  background: none;
+.new-chat-action {
+  flex: 1;
   border: none;
+  border-radius: 5px;
   cursor: pointer;
-  font-size: 14px;
-  opacity: 0.6;
-  transition: 0.2s;
-  padding: 0 2px;
-}
-.action-btn:hover {
-  opacity: 1;
-  transform: scale(1.2);
-}
-.chat-item:hover {
-  background-color: #475569;
-}
-.chat-item.active {
-  background-color: #3b82f6;
+  padding: 8px;
   font-weight: bold;
+  color: white;
+}
+
+.new-chat-action.confirm {
+  background: #27ae60;
+}
+
+.new-chat-action.cancel {
+  background: #e74c3c;
 }
 
 /* 💬 ESTILOS DEL CHAT */
@@ -110,6 +66,7 @@ body {
   flex-direction: column;
   background: white;
 }
+
 .header {
   background: #2c3e50;
   color: white;
@@ -118,10 +75,12 @@ body {
   justify-content: space-between;
   align-items: center;
 }
+
 .header h2 {
   margin: 0;
   font-size: 20px;
 }
+
 .anki-btn {
   background: #27ae60;
   color: white;
@@ -133,9 +92,11 @@ body {
   font-size: 14px;
   transition: 0.2s;
 }
+
 .anki-btn:hover {
   background: #219150;
 }
+
 .anki-btn:disabled {
   background: #95a5a6;
   cursor: not-allowed;
@@ -150,6 +111,7 @@ body {
   flex-direction: column;
   gap: 18px;
 }
+
 .message {
   max-width: 75%;
   padding: 12px 18px;
@@ -157,56 +119,21 @@ body {
   line-height: 1.5;
   font-size: 15px;
 }
+
 .bot {
   background: #e3f2fd;
   color: #0d47a1;
   align-self: flex-start;
   border-bottom-left-radius: 0;
 }
+
 .user {
   background: #2c3e50;
   color: white;
   align-self: flex-end;
   border-bottom-right-radius: 0;
 }
-/* Contenedor del área de escritura */
-.input-area {
-  display: flex;
-  align-items: flex-end; /* Ancla el botón Enviar a la parte de abajo */
-  padding: 20px;
-  background-color: #ffffff;
-  border-top: 1px solid #e2e8f0;
-}
-.input-area textarea {
-  flex: 1;
-  padding: 12px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  font-size: 15px;
-  font-family: inherit;
-  resize: none; /* Evita que el usuario la redimensione manualmente */
-  overflow-y: auto; /* Agrega scroll solo si supera la altura máxima */
-  max-height: 150px; /* Altura máxima antes de usar scroll */
-  min-height: 24px;
-  line-height: 1.4;
-  outline: none;
-  transition: border-color 0.2s;
-}
 
-.input-area textarea:focus {
-  border-color: #3b82f6;
-}
-input {
-  flex: 1;
-  padding: 12px 15px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  outline: none;
-  font-size: 16px;
-}
-input:focus {
-  border-color: #3b82f6;
-}
 button.send-btn {
   background: #2980b9;
   color: white;
@@ -219,6 +146,7 @@ button.send-btn {
   font-weight: bold;
   transition: 0.2s;
 }
+
 button.send-btn:hover {
   background: #2471a3;
 }
@@ -235,6 +163,7 @@ button.send-btn:hover {
   background-color: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(3px);
 }
+
 .modal-content {
   background-color: #fff;
   margin: 5% auto;
@@ -247,6 +176,7 @@ button.send-btn:hover {
   flex-direction: column;
   box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
 }
+
 .modal-header {
   display: flex;
   justify-content: space-between;
@@ -255,11 +185,13 @@ button.send-btn:hover {
   padding-bottom: 15px;
   margin-bottom: 20px;
 }
+
 .close-modal {
   font-size: 28px;
   cursor: pointer;
   color: #999;
 }
+
 .close-modal:hover {
   color: #333;
 }
@@ -269,6 +201,7 @@ button.send-btn:hover {
   overflow-y: auto;
   padding-right: 10px;
 }
+
 .card-revision {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
@@ -277,6 +210,7 @@ button.send-btn:hover {
   margin-bottom: 20px;
   position: relative;
 }
+
 .card-revision .delete-card {
   position: absolute;
   top: 10px;
@@ -292,17 +226,20 @@ button.send-btn:hover {
   gap: 15px;
   margin-top: 10px;
 }
+
 .field-group {
   display: flex;
   flex-direction: column;
   gap: 5px;
 }
+
 .field-group label {
   font-size: 12px;
   font-weight: bold;
   color: #64748b;
   text-transform: uppercase;
 }
+
 .field-group input,
 .field-group textarea {
   padding: 8px;
@@ -317,6 +254,7 @@ button.send-btn:hover {
   padding-top: 20px;
   text-align: right;
 }
+
 .confirm-btn {
   background: #3498db;
   color: white;
@@ -327,6 +265,7 @@ button.send-btn:hover {
   font-weight: bold;
   font-size: 16px;
 }
+
 .confirm-btn:hover {
   background: #2980b9;
 }

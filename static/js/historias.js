@@ -12,29 +12,70 @@ const listaRevision = document.getElementById("lista-revision");
 const btnConfirmarTodo = document.getElementById("btn-confirmar-todo");
 const btnCerrarModal = document.getElementById("btn-cerrar-modal");
 
+const selectorVelocidad = document.getElementById("velocidad-audio");
+// Cambiar la velocidad en tiempo real si el audio ya está sonando
+selectorVelocidad.addEventListener("change", (e) => {
+    audioPlayer.playbackRate = parseFloat(e.target.value);
+});
+
+// Memoria global de palabras guardadas
+let palabrasEnAnki = [];
+
+// Cargar las palabras desde la base de datos apenas abre la página
+async function cargarVocabulario() {
+    try {
+        const res = await fetch("/api/vocabulario");
+        palabrasEnAnki = await res.json();
+    } catch (err) {
+        console.error("Error cargando vocabulario:", err);
+    }
+}
+cargarVocabulario();
+
+// El motor de pintado (filtro visual)
+function resaltarPalabras(textoIngles) {
+    if (palabrasEnAnki.length === 0) return textoIngles;
+
+    let textoResaltado = textoIngles;
+    
+    // Ordenamos de más larga a más corta (para que "give up" se pinte antes que "give")
+    const palabrasOrdenadas = [...palabrasEnAnki].sort((a, b) => b.length - a.length);
+
+    palabrasOrdenadas.forEach(palabra => {
+        // Escapamos símbolos especiales y usamos \b para pintar solo palabras enteras
+        const palabraLimpia = palabra.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`\\b(${palabraLimpia})\\b`, 'gi');
+        
+        textoResaltado = textoResaltado.replace(regex, '<span class="anki-highlight">$1</span>');
+    });
+
+    return textoResaltado;
+}
+
 let lineasActuales = [];
 let audioObjects = [];
 let reproduciendo = false;
 let indiceAudioActual = 0;
 
 // 1. Lógica para cambiar de Modo (Ocultar/Mostrar texto)
-modeBtns.forEach((btn) => {
-  btn.addEventListener("click", () => {
-    // Quitar la clase active a todos y dársela al presionado
-    modeBtns.forEach((b) => b.classList.remove("active"));
-    btn.classList.add("active");
+modeBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+        modeBtns.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
 
-    const modo = btn.dataset.mode;
+        const modo = btn.dataset.mode;
+        
+        // Limpiamos todas las clases de estado del tablero
+        storyBoard.classList.remove("hide-es", "hide-en", "show-ipa");
 
-    // Limpiar clases del tablero
-    storyBoard.classList.remove("hide-es", "hide-en");
-
-    if (modo === "lectura") {
-      storyBoard.classList.add("hide-es"); // Oculta español
-    } else if (modo === "escucha") {
-      storyBoard.classList.add("hide-en", "hide-es"); // Oculta todo
-    }
-  });
+        if (modo === "lectura") {
+            // MODO 2 (Adquisición): Oculta español, muestra IPA
+            storyBoard.classList.add("hide-es", "show-ipa"); 
+        } else if (modo === "escucha") {
+            // MODO 3 (Inmersión): Oculta todo
+            storyBoard.classList.add("hide-en", "hide-es"); 
+        }
+    });
 });
 
 // 2. Generar la historia llamando al Backend
@@ -117,7 +158,9 @@ async function cargarHistoria(historia_id) {
         };
         
         div.innerHTML = `
-            <div class="text-en">${linea.en}</div>
+            <!-- Pasamos la línea en inglés por nuestro filtro de resaltado -->
+            <div class="text-en">${resaltarPalabras(linea.en)}</div>
+            <div class="text-ipa">${linea.ipa}</div>
             <div class="text-es">${linea.es}</div>
         `;
         storyBoard.appendChild(div);
@@ -144,6 +187,13 @@ function reproducirDesde(index) {
     // Cargamos el archivo en el reproductor visible y lo hacemos aparecer
     audioPlayer.style.display = "block";
     audioPlayer.src = lineasActuales[index].audio;
+
+    // ✨ EL TRUCO INFALIBLE: Le decimos a este audio específico que cambie su velocidad 
+    // justo en el milisegundo en que termina de cargar su información (metadata)
+    audioPlayer.onloadedmetadata = () => {
+        audioPlayer.playbackRate = parseFloat(selectorVelocidad.value);
+    };
+    
     audioPlayer.play();
 
     // Limpiar resaltados anteriores y resaltar el actual
@@ -167,28 +217,49 @@ btnPlayAll.addEventListener("click", () => {
 
 // 5. Cargar la lista de historias en la barra lateral
 async function cargarListaHistorias() {
-    const res = await fetch("/api/lista_historias");
-    const historias = await res.json();
-    
-    listaHistoriasContainer.innerHTML = "";
+    try {
+        const res = await fetch("/api/lista_historias");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-    historias.forEach((historia) => {
-        const div = document.createElement("div");
-        div.className = "chat-item"; 
-        
-        const titleSpan = document.createElement("span");
-        titleSpan.className = "chat-item-title";
-        titleSpan.textContent = historia.titulo;
-        
-        // Al hacer clic, cargamos esa historia y actualizamos el título
-        div.onclick = () => {
-            historiaTitulo.textContent = `📚 ${historia.titulo}`;
-            cargarHistoria(historia.id);
-        };
+        const historias = await res.json();
+        const listaHistorias = document.getElementById("lista-historias");
+        listaHistorias.innerHTML = "";
 
-        div.appendChild(titleSpan);
-        listaHistoriasContainer.appendChild(div);
-    });
+        historias.forEach((h) => {
+            const item = document.createElement("div");
+            item.className = "story-list-item";
+
+            const titleSpan = document.createElement("span");
+            titleSpan.textContent = h.titulo;
+            titleSpan.className = "story-list-title";
+            titleSpan.onclick = () => cargarHistoria(h.id);
+
+            const deleteBtn = document.createElement("button");
+            deleteBtn.innerHTML = "🗑️";
+            deleteBtn.className = "story-delete-btn";
+
+            deleteBtn.onclick = async (e) => {
+                e.stopPropagation();
+                if (confirm("¿Estás seguro de que deseas eliminar esta historia?")) {
+                    await fetch(`/api/historias/${h.id}`, { method: "DELETE" });
+                    cargarListaHistorias();
+
+                    const tituloPantalla = document.getElementById("historia-titulo").textContent;
+                    if (tituloPantalla === h.titulo) {
+                        document.getElementById("story-board").innerHTML = "<p class='story-empty-state'>Selecciona o genera una historia.</p>";
+                        document.getElementById("historia-titulo").textContent = "📚 Reproductor de Historias";
+                        audioPlayer.style.display = "none";
+                    }
+                }
+            };
+
+            item.appendChild(titleSpan);
+            item.appendChild(deleteBtn);
+            listaHistorias.appendChild(item);
+        });
+    } catch (err) {
+        console.error("No se pudo cargar la lista de historias:", err);
+    }
 }
 
 // 🚀 AL INICIAR: Cargar la lista automáticamente
@@ -215,6 +286,8 @@ document.addEventListener("mouseup", (e) => {
         // Capturamos el texto y la oración completa (para dársela a Gemini como contexto)
         seleccionActual.palabra = textoSeleccionado;
         seleccionActual.contexto = lineaCercana.querySelector('.text-en').textContent;
+        // 👇 NUEVO: Guardamos el contenedor HTML exacto donde está la oración en inglés
+        seleccionActual.nodoIngles = lineaCercana.querySelector('.text-en');
 
         // Calculamos dónde dibujar el botón flotante (justo arriba al centro de la selección)
         const range = selection.getRangeAt(0);
@@ -351,6 +424,29 @@ btnConfirmarTodo.onclick = async () => {
 
         alert(data.mensaje);
         modalRevision.style.display = "none";
+
+        if (seleccionActual.palabra) {
+            // 1. Guardamos en la base de datos permanente
+            await fetch("/api/vocabulario", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ palabra: seleccionActual.palabra })
+            });
+
+            // 2. Añadimos a la memoria local
+            if (!palabrasEnAnki.includes(seleccionActual.palabra)) {
+                palabrasEnAnki.push(seleccionActual.palabra);
+            }
+
+            // 3. Pintamos la palabra instantáneamente en la pantalla sin recargar
+            if (seleccionActual.nodoIngles) {
+                const htmlOriginal = seleccionActual.nodoIngles.innerHTML;
+                const palabraLimpia = seleccionActual.palabra.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const regex = new RegExp(`\\b(${palabraLimpia})\\b`, 'gi');
+                seleccionActual.nodoIngles.innerHTML = htmlOriginal.replace(regex, '<span class="anki-highlight">$1</span>');
+            }
+        }
+
     } catch (err) {
         alert("Error al inyectar las cartas.");
     } finally {
@@ -360,7 +456,93 @@ btnConfirmarTodo.onclick = async () => {
 };
 
 // Cerrar modal
-btnCerrarModal.onclick = () => (modalRevision.style.display = "none");
-window.onclick = (e) => {
-    if (e.target == modalRevision) modalRevision.style.display = "none";
+//btnCerrarModal.onclick = () => {
+//    modalRevision.style.display = "none";
+//};
+
+// Cerrar modal con confirmación de seguridad
+btnCerrarModal.onclick = () => {
+    // 1. Contamos cuántas cartas hay actualmente en la pantalla
+    const numeroDeCartas = document.querySelectorAll(".card-revision").length;
+    
+    // 2. Si hay cartas, lanzamos la advertencia
+    if (numeroDeCartas > 0) {
+        const confirmarCierre = confirm("⚠️ ¿Estás seguro de cerrar? Se perderán las cartas no guardadas.");
+        
+        // Si el usuario hace clic en "Cancelar" en la alerta, detenemos el cierre
+        if (!confirmarCierre) {
+            return; 
+        }
+    }
+    
+    // 3. Si no había cartas (porque las eliminó todas a mano) o si el usuario dijo "Aceptar", cerramos
+    modalRevision.style.display = "none";
 };
+
+// ==========================================
+// ⌨️ ATAJOS DE TECLADO (Espacio, Modos 1-3, W, C)
+// ==========================================
+document.addEventListener("keydown", function(event) {
+    // 1. Protegemos los campos de texto
+    const etiquetasIgnoradas = ["INPUT", "TEXTAREA", "SELECT"];
+    if (etiquetasIgnoradas.includes(event.target.tagName)) {
+        return; 
+    }
+
+    // 2. Barra espaciadora para Play / Pausa
+    if (event.code === "Space") {
+        event.preventDefault();
+        if (audioPlayer && audioPlayer.src) {
+            if (audioPlayer.paused) {
+                audioPlayer.play();
+            } else {
+                audioPlayer.pause();
+            }
+        }
+    }
+
+    // 3. Teclas 1, 2 y 3 para cambiar de Modo de Aprendizaje
+    const mapaTeclasModos = {
+        "Digit1": 0, "Numpad1": 0, // 1 -> Comprensión
+        "Digit2": 1, "Numpad2": 1, // 2 -> Adquisición
+        "Digit3": 2, "Numpad3": 2  // 3 -> Inmersión
+    };
+
+    if (mapaTeclasModos.hasOwnProperty(event.code)) {
+        const indiceBoton = mapaTeclasModos[event.code];
+        if (modeBtns[indiceBoton]) {
+            event.preventDefault(); 
+            modeBtns[indiceBoton].click(); 
+        }
+    }
+
+
+    // 4. Tecla W: Reproducir la línea/audio anterior
+    if (event.code === "KeyW") {
+        // Verificamos que haya una historia activa (índice mayor o igual a 0)
+        // y que no estemos en la primera línea (porque no hay anterior)
+        if (indiceAudioActual > 0) {
+            event.preventDefault();
+            reproducirDesde(indiceAudioActual - 1);
+        }
+    }
+
+    // 5. Tecla C: Reiniciar el audio actual desde el principio
+    if (event.code === "KeyC") {
+        // Validamos que haya un audio cargado en el reproductor
+        if (audioPlayer && audioPlayer.src) {
+            event.preventDefault();
+            audioPlayer.currentTime = 0; // Regresamos la pista al segundo cero
+            audioPlayer.play(); 
+        }
+    }
+
+    if (event.code === "KeyV") {
+        // Validamos que haya un audio cargado en el reproductor
+        if (audioPlayer && audioPlayer.src) {
+            event.preventDefault();
+            audioPlayer.currentTime = 0; // Regresamos la pista al segundo cero
+            audioPlayer.pause(); // Pausamos el audio para que el usuario decida cuándo reanudar
+        }
+    }
+});

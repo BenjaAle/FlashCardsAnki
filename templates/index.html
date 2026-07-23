@@ -4,89 +4,48 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tutor de Inglés IA</title>
-    <link rel="stylesheet" href="/static/style.css" />
+    <link rel="stylesheet" href="/static/css/style.css" />
+    <link rel="stylesheet" href="/static/css/index.css" />
   </head>
   <body>
     <div class="app-container">
       <div class="sidebar">
-        <div
-          style="
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            margin-bottom: 20px;
-          "
-        >
+        <div class="sidebar-actions">
           <button
             id="btn-new-chat"
-            class="new-chat-btn"
-            style="margin-bottom: 0"
+            class="new-chat-btn btn-compact"
           >
             + Nuevo Chat
           </button>
 
-          <a href="/historias" style="text-decoration: none">
-            <button
-              class="new-chat-btn"
-              style="width: 100%; margin-bottom: 0; background-color: #8e44ad"
-            >
+          <a href="/historias" class="sidebar-link">
+            <button class="new-chat-btn btn-compact btn-historias">
               📚 Historias IA
             </button>
           </a>
           <!-- Añadir a la barra lateral de index.html e historias.html -->
-          <a href="/fonetica" style="text-decoration: none;">
-              <button class="new-chat-btn" style="width: 100%; margin-bottom: 0; background-color: #f39c12;">🗣️ Fonética</button>
+          <a href="/fonetica" class="sidebar-link">
+              <button class="new-chat-btn btn-compact btn-fonetica">🗣️ Fonética</button>
           </a>
         </div>
 
-        <div
-          id="new-chat-form"
-          style="
-            display: none;
-            flex-direction: column;
-            gap: 8px;
-            margin-bottom: 20px;
-          "
-        >
+        <div id="new-chat-form" class="new-chat-form">
           <input
             type="text"
             id="new-chat-input"
             placeholder="Nombre de la sesión..."
-            style="
-              padding: 10px;
-              border-radius: 6px;
-              border: none;
-              font-size: 14px;
-            "
+            class="new-chat-input"
           />
-          <div style="display: flex; gap: 5px">
+          <div class="new-chat-actions">
             <button
               id="btn-confirm-chat"
-              style="
-                flex: 1;
-                background: #27ae60;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                cursor: pointer;
-                padding: 8px;
-                font-weight: bold;
-              "
+              class="new-chat-action confirm"
             >
               Crear
             </button>
             <button
               id="btn-cancel-chat"
-              style="
-                flex: 1;
-                background: #e74c3c;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                cursor: pointer;
-                padding: 8px;
-                font-weight: bold;
-              "
+              class="new-chat-action cancel"
             >
               Cancelar
             </button>
@@ -98,7 +57,7 @@
 
       <div class="chat-container">
         <div class="header">
-          <h2 id="chat-title">🇬🇧 Tutor IA</h2>
+          <h2 id="chat-title">Tutor IA</h2>
           <button class="anki-btn" id="btn-anki">Extraer a Anki</button>
         </div>
 
@@ -130,6 +89,6 @@
       </div>
     </div>
 
-    <script src="/static/script.js"></script>
+    <script src="/static/js/script.js"></script>
   </body>
 </html>

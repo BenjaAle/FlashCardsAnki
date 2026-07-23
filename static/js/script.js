@@ -1,22 +1,33 @@
-const btnSend = document.getElementById("btn-send");
-const userInput = document.getElementById("user-input");
-const chatBox = document.getElementById("chat-box");
-const btnAnki = document.getElementById("btn-anki");
-const chatList = document.getElementById("chat-list");
-const btnNewChat = document.getElementById("btn-new-chat");
-const chatTitle = document.getElementById("chat-title");
+const btnSend = document.getElementById("btn-send"); // Capturamos el botón de enviar
+const userInput = document.getElementById("user-input"); // Capturamos la caja de texto del usuario
+const chatBox = document.getElementById("chat-box"); // Capturamos el contenedor de mensajes
+const btnAnki = document.getElementById("btn-anki"); // Capturamos el botón de extraer a Anki
+const chatList = document.getElementById("chat-list"); // Capturamos la lista de chats
+const btnNewChat = document.getElementById("btn-new-chat"); // Capturamos el botón de nuevo chat
+const chatTitle = document.getElementById("chat-title"); // Capturamos el título del chat
 
-// Variable vital para saber en qué conversación estamos
+// Variable para saber en qué conversación estamos
 let currentChatId = null;
 
+const newChatForm = document.getElementById("new-chat-form"); // Capturamos el mini-formulario de nuevo chat
+const newChatInput = document.getElementById("new-chat-input"); // Capturamos la caja de texto del mini-formulario
+const btnConfirmChat = document.getElementById("btn-confirm-chat"); // Capturamos el botón de confirmar del mini-formulario
+const btnCancelChat = document.getElementById("btn-cancel-chat"); // Capturamos el botón de cancelar del mini-formulario
+
+// Capturamos los nuevos elementos del modal
+const modalRevision = document.getElementById("modal-revision"); // Capturamos el modal de revisión
+const listaRevision = document.getElementById("lista-revision"); // Capturamos la lista de revisiones
+const btnConfirmarTodo = document.getElementById("btn-confirmar-todo"); // Capturamos el botón de confirmar todo
+const btnCerrarModal = document.getElementById("btn-cerrar-modal"); // Capturamos el botón de cerrar modal
+
+// Pasar de markdown a HTML
 function formatearMarkdown(texto) {
   let html = texto
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
     
-  // 🌟 Enseñar a leer TODOS los títulos de Markdown (H1 hasta H6)
-  // Es importante ir del más grande (######) al más chico (#)
+  // Titulos (H1 hasta H6)
   html = html.replace(/^###### (.*$)/gim, "<h6>$1</h6>");
   html = html.replace(/^##### (.*$)/gim, "<h5>$1</h5>");
   html = html.replace(/^#### (.*$)/gim, "<h4>$1</h4>");
@@ -24,10 +35,10 @@ function formatearMarkdown(texto) {
   html = html.replace(/^## (.*$)/gim, "<h2>$1</h2>");
   html = html.replace(/^# (.*$)/gim, "<h1>$1</h1>");
 
-  html = html.replace(/(^|\n)\s*[\*-]\s+/g, "$1• ");
-  html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-  html = html.replace(/\*(.*?)\*/g, "<em>$1</em>");
-  html = html.replace(/\n/g, "<br>");
+  html = html.replace(/(^|\n)\s*[\*-]\s+/g, "$1• "); // listas con viñetas
+  html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>"); // negrita
+  html = html.replace(/\*(.*?)\*/g, "<em>$1</em>"); // cursiva
+  html = html.replace(/\n/g, "<br>"); // cambio \n por <br>
   
   // Limpieza visual: Quita los saltos de línea extra debajo de los títulos
   html = html.replace(/<\/h6><br>/g, "</h6>");
@@ -40,29 +51,41 @@ function formatearMarkdown(texto) {
   return html;
 }
 
-// 🗂️ 1. Cargar la lista de chats en la barra lateral
-// 🗂️ 1. Cargar la lista de chats (AHORA CON BOTONES DE EDITAR Y BORRAR)
+// 🗂️ 1. Cargar la lista de chats en la barra lateral con botones de eliminar y editar
 async function cargarChats() {
+
+  // llamada a la API para obtener la lista de chats
+  // llega algo asi: # [{"id": 1, "titulo": "Chat 1"}, {"id": 2, "titulo": "Chat 2"}]
   const res = await fetch("/chats");
+
+  // Convertimos la respuesta a JSON
+  // ejemplo: [{"id": 1, "titulo": "Chat 1"}, {"id": 2, "titulo": "Chat 2"}]
   const chats = await res.json();
+
+  // inicio con la lista vacia
   chatList.innerHTML = "";
 
+  // chat es un objeto con id y titulo, ejemplo: {id: 1, titulo: "Chat 1"}
   chats.forEach((chat) => {
     const div = document.createElement("div");
     div.className = "chat-item";
+
+    // le pongo la clase "active"
     if (chat.id === currentChatId) div.classList.add("active");
 
     // Contenedor del título (Al hacer clic aquí, abre el chat)
     const titleSpan = document.createElement("span");
     titleSpan.className = "chat-item-title";
     titleSpan.textContent = chat.titulo;
+
+    // abrirChat se define más abajo, y se encarga de cargar el historial del chat seleccionado
     titleSpan.onclick = () => abrirChat(chat.id, chat.titulo);
 
     // Contenedor de las herramientas (Lápiz y Basurero)
     const actionsDiv = document.createElement("div");
     actionsDiv.className = "chat-item-actions";
 
-    // Botón Editar (Renombrado elegante sin alertas)
+    // Botón Editar
     const btnEdit = document.createElement("button");
     btnEdit.className = "action-btn";
     btnEdit.textContent = "✏️";
@@ -73,6 +96,8 @@ async function cargarChats() {
       // Convertimos el texto en una cajita de texto (input)
       titleSpan.innerHTML = `<input type="text" id="edit-input-${chat.id}" value="${chat.titulo}" style="width: 100%; padding: 2px; color: black; border-radius: 3px; border: none; font-size: 13px;">`;
       const input = document.getElementById(`edit-input-${chat.id}`);
+      
+      // pone el cursor dentro para poder escribir directamente sin otro clic
       input.focus();
 
       // Función para guardar cuando el usuario termine
@@ -86,7 +111,7 @@ async function cargarChats() {
             body: JSON.stringify({ titulo: nuevoTitulo }),
           });
           if (currentChatId === chat.id)
-            chatTitle.textContent = "🇬🇧 " + nuevoTitulo;
+            chatTitle.textContent = nuevoTitulo;
         }
         cargarChats(); // Refrescamos la lista
       };
@@ -112,7 +137,7 @@ async function cargarChats() {
       if (currentChatId === chat.id) {
         currentChatId = null;
         chatBox.innerHTML = "";
-        chatTitle.textContent = "🇬🇧 Tutor IA";
+        chatTitle.textContent = "Tutor IA";
       }
 
       cargarChats(); // Refrescamos la lista automáticamente
@@ -129,11 +154,12 @@ async function cargarChats() {
 
 // 📖 2. Abrir un chat específico y cargar su historial
 async function abrirChat(id, titulo) {
-  currentChatId = id;
-  chatTitle.textContent = "🇬🇧 " + titulo;
+  currentChatId = id; // actualizar el chat actual
+  chatTitle.textContent = titulo; // Titulo superior del chat
   chatBox.innerHTML = "";
   await cargarChats(); // Refrescar para marcar en azul el chat activo
 
+   // pido a la api el historial de mensajes de ese chat
   const res = await fetch(`/chats/${id}/mensajes`);
   const mensajes = await res.json();
 
@@ -144,27 +170,23 @@ async function abrirChat(id, titulo) {
       "¡Hello! Soy tu tutor de inglés. ¿De qué hablaremos en esta sesión? 🚀";
     chatBox.appendChild(sysMsg);
   } else {
-    mensajes.forEach((msg) => {
+    // css y formato de mensaje segun si es el usuario o el bot
+    mensajes.forEach((msg) => { 
       const msgDiv = document.createElement("div");
       msgDiv.className = msg.rol === "user" ? "message user" : "message bot";
       if (msg.rol === "bot") {
         msgDiv.innerHTML = formatearMarkdown(msg.texto);
       } else {
-        msgDiv.textContent = msg.texto;
+        msgDiv.textContent = msg.texto; // evitar xss
       }
       chatBox.appendChild(msgDiv);
     });
   }
-  chatBox.scrollTop = chatBox.scrollHeight;
+  // poner el scroll al final para ver el último mensaje
+  chatBox.scrollTop = chatBox.scrollHeight; 
 }
 
-// Capturamos los nuevos elementos visuales
-const newChatForm = document.getElementById("new-chat-form");
-const newChatInput = document.getElementById("new-chat-input");
-const btnConfirmChat = document.getElementById("btn-confirm-chat");
-const btnCancelChat = document.getElementById("btn-cancel-chat");
-
-// ➕ 3. Lógica moderna para crear nuevo chat
+// ➕ 3. Lógica para crear nuevo chat
 btnNewChat.addEventListener("click", () => {
   btnNewChat.style.display = "none"; // Ocultamos el botón
   newChatForm.style.display = "flex"; // Mostramos el mini-formulario
@@ -218,7 +240,7 @@ async function sendMessage() {
   chatBox.appendChild(userMsg);
 
   userInput.value = "";
-  userInput.style.height = "auto"; // 👈 ¡LÍNEA NUEVA! Restaura el tamaño de la caja
+  userInput.style.height = "auto";
   chatBox.scrollTop = chatBox.scrollHeight;
 
   const botMsg = document.createElement("div");
@@ -258,11 +280,6 @@ userInput.addEventListener("input", function () {
   this.style.height = this.scrollHeight + "px"; // Expande según el contenido
 });
 
-// Capturamos los nuevos elementos del modal
-const modalRevision = document.getElementById("modal-revision");
-const listaRevision = document.getElementById("lista-revision");
-const btnConfirmarTodo = document.getElementById("btn-confirmar-todo");
-const btnCerrarModal = document.getElementById("btn-cerrar-modal");
 
 // 📥 5. NUEVA LÓGICA: Extraer -> Revisar -> Inyectar
 btnAnki.addEventListener("click", async () => {
@@ -388,9 +405,27 @@ btnConfirmarTodo.onclick = async () => {
 };
 
 // Cerrar modal
-btnCerrarModal.onclick = () => (modalRevision.style.display = "none");
-window.onclick = (e) => {
-  if (e.target == modalRevision) modalRevision.style.display = "none";
+//btnCerrarModal.onclick = () => {
+//    modalRevision.style.display = "none";
+//};
+
+// Cerrar modal con confirmación de seguridad
+btnCerrarModal.onclick = () => {
+    // 1. Contamos cuántas cartas hay actualmente en la pantalla
+    const numeroDeCartas = document.querySelectorAll(".card-revision").length;
+    
+    // 2. Si hay cartas, lanzamos la advertencia
+    if (numeroDeCartas > 0) {
+        const confirmarCierre = confirm("⚠️ ¿Estás seguro de cerrar? Se perderán las cartas no guardadas.");
+        
+        // Si el usuario hace clic en "Cancelar" en la alerta, detenemos el cierre
+        if (!confirmarCierre) {
+            return; 
+        }
+    }
+    
+    // 3. Si no había cartas (porque las eliminó todas a mano) o si el usuario dijo "Aceptar", cerramos
+    modalRevision.style.display = "none";
 };
 
 // 🚀 AL INICIAR: Cargar la lista de chats automáticamente

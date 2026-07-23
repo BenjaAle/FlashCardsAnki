@@ -1,0 +1,140 @@
+.btn-training {
+  background: #e67e22;
+  margin-top: 10px;
+}
+
+.sidebar-description {
+  font-size: 13px;
+  color: #cbd5e1;
+  line-height: 1.5;
+}
+
+.training-inputs {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.training-input {
+  width: 50%;
+  text-align: center;
+  font-weight: bold;
+}
+
+.fonetica-chat-container {
+  padding: 20px;
+  overflow-y: auto;
+  background: #fafafa;
+}
+
+.fonetica-header {
+  border-radius: 8px;
+  background: #8e44ad;
+}
+
+.gym-status {
+  margin-top: 0;
+}
+
+.gym-play-btn {
+  background: #3498db;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 80px;
+  height: 80px;
+  font-size: 30px;
+  cursor: pointer;
+  margin: 20px 0;
+  display: none;
+}
+
+.gym-options {
+  display: none;
+}
+
+.section-title {
+  color: #1e293b;
+}
+
+.connected-title {
+  margin-top: 40px;
+  border-top: 2px solid #e2e8f0;
+  padding-top: 20px;
+}
+
+.section-description {
+  font-size: 14px;
+  color: #64748b;
+  margin-bottom: 15px;
+}
+
+/* Estilos del Laboratorio */
+.grid-fonemas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.card-fonema {
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 15px;
+  text-align: center;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.card-fonema:hover,
+.card-fonema.active {
+  border-color: #8e44ad;
+  background: #fbf5ff;
+  transform: translateY(-2px);
+}
+
+.simbolo-fonema {
+  font-size: 32px;
+  font-weight: bold;
+  color: #8e44ad;
+  margin-bottom: 5px;
+}
+
+.gym-container {
+  background: #1e293b;
+  color: white;
+  padding: 30px;
+  border-radius: 12px;
+  text-align: center;
+  margin-top: 20px;
+  display: none; /* Se muestra al iniciar el juego */
+}
+
+.gym-btn {
+  background: white;
+  color: #1e293b;
+  font-size: 24px;
+  font-weight: bold;
+  padding: 15px 30px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  margin: 10px;
+  width: 200px;
+  transition: 0.2s;
+}
+
+.gym-btn:hover {
+  background: #cbd5e1;
+}
+
+.gym-btn.correct {
+  background: #27ae60;
+  color: white;
+}
+
+.gym-btn.wrong {
+  background: #e74c3c;
+  color: white;
+}

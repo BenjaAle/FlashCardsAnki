@@ -1,0 +1,226 @@
+.library-title {
+  margin-top: 30px;
+  font-size: 14px;
+}
+
+.story-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.story-label {
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+.story-textarea {
+  padding: 8px;
+  border-radius: 5px;
+  border: none;
+  resize: none;
+  font-family: inherit;
+}
+
+.btn-compact {
+  margin-bottom: 0;
+}
+
+.story-list {
+  margin-top: 10px;
+}
+
+.story-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #ffffff;
+  padding: 10px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.story-list-title {
+  cursor: pointer;
+  flex-grow: 1;
+  font-weight: bold;
+  color: #1e293b;
+}
+
+.story-delete-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 5px;
+  transition: 0.2s;
+}
+
+.story-delete-btn:hover {
+  transform: scale(1.2);
+}
+
+.historias-chat-container {
+  padding: 20px;
+  overflow-y: auto;
+  background: #fafafa;
+}
+
+.historias-header {
+  border-radius: 8px;
+  margin-bottom: 20px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 15px;
+}
+
+.historias-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.speed-select {
+  padding: 8px;
+  border-radius: 5px;
+  border: 1px solid #cbd5e1;
+  outline: none;
+  cursor: pointer;
+}
+
+.story-audio-player {
+  width: 100%;
+  height: 40px;
+  border-radius: 5px;
+  display: none;
+  outline: none;
+}
+
+.story-empty-state {
+  text-align: center;
+  color: #94a3b8;
+  margin-top: 50px;
+}
+
+.floating-anki-btn {
+  display: none;
+  position: absolute;
+  background: #27ae60;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  transition: transform 0.1s;
+}
+
+.story-controls {
+  display: flex;
+  gap: 10px;
+  background: #f8fafc;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border: 1px solid #e2e8f0;
+}
+/* Estilos específicos para el reproductor de historias */
+.mode-btn {
+  flex: 1;
+  padding: 10px;
+  border: 2px solid #cbd5e1;
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  color: #475569;
+  transition: 0.2s;
+}
+
+.mode-btn.active {
+  border-color: #3b82f6;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.mode-subtitle {
+  font-size: 11px;
+  font-weight: normal;
+}
+
+.story-line {
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  transition: 0.3s;
+}
+
+.story-line.playing {
+  border-left: 5px solid #27ae60;
+  background: #f0fdf4;
+}
+
+.text-en {
+  font-size: 18px;
+  font-weight: bold;
+  color: #1e293b;
+  margin-bottom: 5px;
+}
+
+.text-es {
+  font-size: 15px;
+  color: #64748b;
+  font-style: italic;
+}
+
+.text-ipa {
+  font-size: 17px;
+  color: #8e44ad;
+  margin-bottom: 5px;
+  font-family: monospace;
+  display: none;
+}
+
+/* Clases mágicas para ocultar según el modo */
+.hide-es .text-es {
+  display: none;
+}
+
+.hide-en .text-en {
+  display: none;
+}
+
+.hide-en.hide-es .story-line {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hide-en.hide-es .story-line::after {
+  content: "🎧 Escuchando audio...";
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.show-ipa .text-ipa {
+  display: block;
+}
+
+/* Estilo para las palabras ya inyectadas en Anki */
+.anki-highlight {
+    background-color: rgba(255, 235, 59, 0.3); /* Amarillo muy transparente */
+    border-bottom: 2px dashed #fbc02d;         /* Subrayado punteado dorado */
+    border-radius: 3px;
+    padding: 0 2px;
+    transition: background-color 0.3s ease;
+}
+
+.anki-highlight:hover {
+    background-color: rgba(255, 235, 59, 0.6); /* Se oscurece un poco al pasar el mouse */
+}
